@@ -1,0 +1,11 @@
+# runtime
+regex
+# experiments (PyTorch for experiments/lm.py: install the build matching your CUDA from pytorch.org)
+numpy
+matplotlib
+tokenizers
+huggingface_hub
+pyarrow
+opencc-python-reimplemented
+# tests
+pytest

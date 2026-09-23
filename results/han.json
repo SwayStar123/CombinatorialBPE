@@ -1,0 +1,132 @@
+[
+ {
+  "vocab": 4096,
+  "comb_han": {
+   "chars_per_token": 1.431452635677727,
+   "sizes": {
+    "variation": 4,
+    "prefix": 21,
+    "core": 4002,
+    "suffix": 69
+   },
+   "trad_tokens": 0.1418921049636872,
+   "core_script_dupes": 0.0
+  },
+  "comb": {
+   "chars_per_token": 1.3176566802886618,
+   "script_dupes": 0.16924719701014415
+  },
+  "bpe_gpt2": {
+   "chars_per_token": 1.1263199230161778,
+   "script_dupes": 0.16536458333333334
+  },
+  "bpe_cl100k": {
+   "chars_per_token": 1.155902460627197,
+   "script_dupes": 0.16536458333333334
+  }
+ },
+ {
+  "vocab": 8192,
+  "comb_han": {
+   "chars_per_token": 1.6553565539460666,
+   "sizes": {
+    "variation": 4,
+    "prefix": 40,
+    "core": 8048,
+    "suffix": 100
+   },
+   "trad_tokens": 0.16565932672061695,
+   "core_script_dupes": 0.0
+  },
+  "comb": {
+   "chars_per_token": 1.5814690436265755,
+   "script_dupes": 0.18619273707173103
+  },
+  "bpe_gpt2": {
+   "chars_per_token": 1.3109879560735407,
+   "script_dupes": 0.1818296370967742
+  },
+  "bpe_cl100k": {
+   "chars_per_token": 1.356398147366233,
+   "script_dupes": 0.18069556451612903
+  }
+ },
+ {
+  "vocab": 16384,
+  "comb_han": {
+   "chars_per_token": 1.8836664053570575,
+   "sizes": {
+    "variation": 4,
+    "prefix": 80,
+    "core": 16101,
+    "suffix": 199
+   },
+   "trad_tokens": 0.18170820707628826,
+   "core_script_dupes": 0.0
+  },
+  "comb": {
+   "chars_per_token": 1.7906510671031068,
+   "script_dupes": 0.1817838008194138
+  },
+  "bpe_gpt2": {
+   "chars_per_token": 1.4532577686805719,
+   "script_dupes": 0.17826140873015872
+  },
+  "bpe_cl100k": {
+   "chars_per_token": 1.51872402975945,
+   "script_dupes": 0.17609126984126985
+  }
+ },
+ {
+  "vocab": 32768,
+  "comb_han": {
+   "chars_per_token": 2.0940396368063507,
+   "sizes": {
+    "variation": 4,
+    "prefix": 160,
+    "core": 32242,
+    "suffix": 362
+   },
+   "trad_tokens": 0.19557259961851428,
+   "core_script_dupes": 0.0
+  },
+  "comb": {
+   "chars_per_token": 2.0057153011579487,
+   "script_dupes": 0.17883918530551043
+  },
+  "bpe_gpt2": {
+   "chars_per_token": 1.5939408142374376,
+   "script_dupes": 0.17461245078740156
+  },
+  "bpe_cl100k": {
+   "chars_per_token": 1.6862254868708795,
+   "script_dupes": 0.17107529527559054
+  }
+ },
+ {
+  "vocab": 65536,
+  "comb_han": {
+   "chars_per_token": 2.2858669212260008,
+   "sizes": {
+    "variation": 4,
+    "prefix": 285,
+    "core": 64701,
+    "suffix": 546
+   },
+   "trad_tokens": 0.20733266628278418,
+   "core_script_dupes": 0.0
+  },
+  "comb": {
+   "chars_per_token": 2.198034476660463,
+   "script_dupes": 0.17397440868553704
+  },
+  "bpe_gpt2": {
+   "chars_per_token": 1.7155162002443367,
+   "script_dupes": 0.1689797794117647
+  },
+  "bpe_cl100k": {
+   "chars_per_token": 1.8365740410908902,
+   "script_dupes": 0.16616115196078432
+  }
+ }
+]

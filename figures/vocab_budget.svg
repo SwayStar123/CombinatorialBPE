@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" width="1000" height="330" role="img" aria-labelledby="t d">
+<title id="t">Vocabulary budget: standard vs combinatorial</title>
+<desc id="d">About 20% of a standard 16k vocabulary are case/space/punctuation variants; the combinatorial vocabulary spends 98.8% of rows on distinct cores.</desc>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8c8b85"/></marker></defs>
+<rect width="1000" height="330" rx="14" fill="#ffffff" stroke="#e3e2dc"/>
+<text x="32.0" y="44.0" font-size="20" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Where 16,384 embedding rows go (English Wikipedia)</text>
+<text x="32.0" y="100.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Standard BPE</text>
+<text x="32.0" y="120.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >cl100k-style pretokenizer</text>
+<rect x="250.0" y="80.0" width="564.6" height="44.0" rx="4" fill="#efeee9" stroke="#8c8b85" stroke-width="1" />
+<text x="532.3" y="107.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >distinct words / pieces  80%</text>
+<rect x="816.6" y="80.0" width="145.4" height="44.0" rx="4" fill="#f9dbe3" stroke="#c2415f" stroke-width="1" />
+<text x="889.3" y="107.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >variants  20%</text>
+<text x="960.0" y="146.0" font-size="12" fill="#c2415f" text-anchor="end" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" xml:space="preserve">e.g.  &#x27; the&#x27;  &#x27; The&#x27;  &#x27;The&#x27;  &#x27; world&#x27;  &#x27; World&#x27;  &#x27;World&#x27;  …</text>
+<text x="32.0" y="200.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Combinatorial BPE</text>
+<text x="32.0" y="220.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >same budget</text>
+<rect x="250.0" y="180.0" width="701.7" height="44.0" rx="4" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
+<text x="600.9" y="207.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >distinct cores  16,193 rows  (98.8%)</text>
+<rect x="953.7" y="180.0" width="8.3" height="44.0" rx="4" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
+<text x="956.0" y="246.0" font-size="12" fill="#2a78d6" text-anchor="end" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >variation + prefix + suffix: 3 + 108 + 80 rows (1.2%)</text>
+<text x="32.0" y="290.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Result on held-out text: 5.20 vs 4.07 characters per token (22% fewer tokens). No standard vocab reaches it: even 262k rows tops out at 4.86.</text>
+</svg>

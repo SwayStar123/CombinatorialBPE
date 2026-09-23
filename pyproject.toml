@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "combinatorial-bpe"
+version = "0.1.0"
+description = "BPE tokenizer whose tokens are (variation, prefix, core, suffix) tuples"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = ["regex"]
+
+[project.optional-dependencies]
+experiments = ["numpy", "matplotlib", "tokenizers", "huggingface_hub", "pyarrow", "opencc-python-reimplemented"]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["cbpe"]
+
+[tool.setuptools.package-data]
+cbpe = ["data/*.json"]

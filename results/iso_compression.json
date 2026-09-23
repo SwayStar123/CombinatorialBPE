@@ -1,0 +1,77 @@
+{
+ "corpus": "wiki_en",
+ "standard_gpt2": [
+  {
+   "vocab": 4096,
+   "rows": 4096,
+   "chars_per_token": 3.204635184330616
+  },
+  {
+   "vocab": 8192,
+   "rows": 8192,
+   "chars_per_token": 3.653484084205501
+  },
+  {
+   "vocab": 16384,
+   "rows": 16384,
+   "chars_per_token": 4.074896599498787
+  },
+  {
+   "vocab": 32768,
+   "rows": 32768,
+   "chars_per_token": 4.407545129589173
+  },
+  {
+   "vocab": 65536,
+   "rows": 65536,
+   "chars_per_token": 4.641469674957879
+  },
+  {
+   "vocab": 131072,
+   "rows": 131072,
+   "chars_per_token": 4.784589793194081
+  },
+  {
+   "vocab": 262144,
+   "rows": 262144,
+   "chars_per_token": 4.862268150847007
+  }
+ ],
+ "combinatorial": [
+  {
+   "vocab": 4096,
+   "rows": 4096,
+   "chars_per_token": 4.06064986640462
+  },
+  {
+   "vocab": 8192,
+   "rows": 8192,
+   "chars_per_token": 4.6778519303935635
+  },
+  {
+   "vocab": 9300,
+   "rows": 9300,
+   "chars_per_token": 4.78494846610502
+  },
+  {
+   "vocab": 10000,
+   "rows": 10000,
+   "chars_per_token": 4.839943082269352
+  },
+  {
+   "vocab": 16384,
+   "rows": 16384,
+   "chars_per_token": 5.196901953515444
+  },
+  {
+   "vocab": 32768,
+   "rows": 32768,
+   "chars_per_token": 5.57036860985881
+  },
+  {
+   "vocab": 65536,
+   "rows": 65536,
+   "chars_per_token": 5.808943837194668
+  }
+ ]
+}

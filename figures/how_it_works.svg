@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="1000" height="620" role="img" aria-labelledby="t d">
+<title id="t">How Combinatorial BPE works</title>
+<desc id="d">Words are split into variation, prefix, core and suffix; inventories are learned under a shared budget; the model sums four embeddings and predicts the parts with a chained head.</desc>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8c8b85"/></marker></defs>
+<rect width="1000" height="620" rx="14" fill="#ffffff" stroke="#e3e2dc"/>
+<text x="32.0" y="44.0" font-size="20" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >How Combinatorial BPE works</text>
+<text x="32.0" y="84.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >1  Tokenize: split each word into a 4-tuple</text>
+<text x="32.0" y="124.0" font-size="14" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27; the&#x27;</text>
+<line x1="118.0" y1="119.0" x2="150.0" y2="119.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="160.0" y="106.0" width="62.0" height="26.0" rx="5" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="191.0" y="124.0" font-size="13" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >–</text>
+<rect x="228.0" y="106.0" width="62.0" height="26.0" rx="5" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
+<text x="259.0" y="124.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27; &#x27;</text>
+<rect x="296.0" y="106.0" width="70.0" height="26.0" rx="5" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
+<text x="331.0" y="124.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >the</text>
+<rect x="372.0" y="106.0" width="62.0" height="26.0" rx="5" fill="#fbe0d3" stroke="#d4561f" stroke-width="1" />
+<text x="403.0" y="124.0" font-size="13" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >∅</text>
+<text x="32.0" y="160.0" font-size="14" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27;The&#x27;</text>
+<line x1="118.0" y1="155.0" x2="150.0" y2="155.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="160.0" y="142.0" width="62.0" height="26.0" rx="5" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="191.0" y="160.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >Aa</text>
+<rect x="228.0" y="142.0" width="62.0" height="26.0" rx="5" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
+<text x="259.0" y="160.0" font-size="13" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >∅</text>
+<rect x="296.0" y="142.0" width="70.0" height="26.0" rx="5" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
+<text x="331.0" y="160.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >the</text>
+<rect x="372.0" y="142.0" width="62.0" height="26.0" rx="5" fill="#fbe0d3" stroke="#d4561f" stroke-width="1" />
+<text x="403.0" y="160.0" font-size="13" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >∅</text>
+<text x="32.0" y="196.0" font-size="14" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27; THE,&#x27;</text>
+<line x1="118.0" y1="191.0" x2="150.0" y2="191.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="160.0" y="178.0" width="62.0" height="26.0" rx="5" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="191.0" y="196.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >AA</text>
+<rect x="228.0" y="178.0" width="62.0" height="26.0" rx="5" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
+<text x="259.0" y="196.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27; &#x27;</text>
+<rect x="296.0" y="178.0" width="70.0" height="26.0" rx="5" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
+<text x="331.0" y="196.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >the</text>
+<rect x="372.0" y="178.0" width="62.0" height="26.0" rx="5" fill="#fbe0d3" stroke="#d4561f" stroke-width="1" />
+<text x="403.0" y="196.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27;,&#x27;</text>
+<text x="32.0" y="232.0" font-size="14" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27; (the&#x27;</text>
+<line x1="118.0" y1="227.0" x2="150.0" y2="227.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="160.0" y="214.0" width="62.0" height="26.0" rx="5" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="191.0" y="232.0" font-size="13" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >–</text>
+<rect x="228.0" y="214.0" width="62.0" height="26.0" rx="5" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
+<text x="259.0" y="232.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27; (&#x27;</text>
+<rect x="296.0" y="214.0" width="70.0" height="26.0" rx="5" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
+<text x="331.0" y="232.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >the</text>
+<rect x="372.0" y="214.0" width="62.0" height="26.0" rx="5" fill="#fbe0d3" stroke="#d4561f" stroke-width="1" />
+<text x="403.0" y="232.0" font-size="13" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >∅</text>
+<text x="32.0" y="268.0" font-size="14" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27;the.&quot;&#x27;</text>
+<line x1="118.0" y1="263.0" x2="150.0" y2="263.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="160.0" y="250.0" width="62.0" height="26.0" rx="5" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="191.0" y="268.0" font-size="13" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >–</text>
+<rect x="228.0" y="250.0" width="62.0" height="26.0" rx="5" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
+<text x="259.0" y="268.0" font-size="13" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >∅</text>
+<rect x="296.0" y="250.0" width="70.0" height="26.0" rx="5" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
+<text x="331.0" y="268.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >the</text>
+<rect x="372.0" y="250.0" width="62.0" height="26.0" rx="5" fill="#fbe0d3" stroke="#d4561f" stroke-width="1" />
+<text x="403.0" y="268.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >&#x27;.&quot;&#x27;</text>
+<text x="160.0" y="300.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" xml:space="preserve">variation   prefix     core      suffix</text>
+<text x="32.0" y="328.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Standard BPE stores each of these as a separate vocabulary row;</text>
+<text x="32.0" y="347.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >here they all share the single core row  the.</text>
+<text x="470.0" y="84.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >2  Learn the inventories (16k budget, English)</text>
+<rect x="470.0" y="102.0" width="100.0" height="118.0" rx="10" fill="#fbecc4" stroke="#b27800" stroke-width="1.4" />
+<text x="520.0" y="126.0" font-size="14" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >variation</text>
+<text x="520.0" y="148.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">hand-coded</text>
+<text x="520.0" y="167.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">as-is</text>
+<text x="520.0" y="186.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">Aa  AA</text>
+<text x="520.0" y="205.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">(繁 for zh)</text>
+<rect x="580.0" y="102.0" width="115.0" height="118.0" rx="10" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1.4" />
+<text x="637.5" y="126.0" font-size="14" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >prefix</text>
+<text x="637.5" y="148.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">learned</text>
+<text x="637.5" y="167.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">108 rows</text>
+<text x="637.5" y="186.0" font-size="12" fill="#55544f" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" xml:space="preserve">&#x27; &#x27;  &#x27;\n\n&#x27;</text>
+<text x="637.5" y="205.0" font-size="12" fill="#55544f" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" xml:space="preserve">&#x27; (&#x27;  &#x27; &quot;&#x27;</text>
+<rect x="705.0" y="102.0" width="125.0" height="118.0" rx="10" fill="#d3f0e4" stroke="#138a60" stroke-width="1.4" />
+<text x="767.5" y="126.0" font-size="14" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >core</text>
+<text x="767.5" y="148.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">learned BPE</text>
+<text x="767.5" y="167.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">16,193 rows</text>
+<text x="767.5" y="186.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">hello  apollo</text>
+<text x="767.5" y="205.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">1969  台湾</text>
+<rect x="840.0" y="102.0" width="118.0" height="118.0" rx="10" fill="#fbe0d3" stroke="#d4561f" stroke-width="1.4" />
+<text x="899.0" y="126.0" font-size="14" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >suffix</text>
+<text x="899.0" y="148.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">learned</text>
+<text x="899.0" y="167.0" font-size="13" fill="#55544f" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" xml:space="preserve">80 rows</text>
+<text x="899.0" y="186.0" font-size="12" fill="#55544f" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" xml:space="preserve">&#x27;,&#x27;  &#x27;.&#x27;  &#x27;),&#x27;</text>
+<text x="899.0" y="205.0" font-size="12" fill="#55544f" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" xml:space="preserve">&#x27;.&quot;&#x27;  &#x27;。&#x27;</text>
+<text x="470.0" y="250.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >The affix/core split is learned: an affix is kept only if it saves</text>
+<text x="470.0" y="269.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >more tokens than the core merge it would displace.</text>
+<text x="470.0" y="294.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >3 + 108 + 16,193 + 80 = 16,384 rows = same as a 16k standard vocab.</text>
+<line x1="32.0" y1="375.0" x2="968.0" y2="375.0" stroke="#e3e2dc" stroke-width="1" />
+<text x="32.0" y="399.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >3  Model: sum the four embeddings in, predict the four parts out</text>
+<rect x="32.0" y="431.0" width="150.0" height="26.0" rx="5" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="107.0" y="449.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >E_var[Aa]</text>
+<line x1="184.0" y1="444.0" x2="214.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="32.0" y="465.0" width="150.0" height="26.0" rx="5" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
+<text x="107.0" y="483.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >E_pre[&#x27;·&quot;&#x27;]</text>
+<line x1="184.0" y1="478.0" x2="214.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="32.0" y="499.0" width="150.0" height="26.0" rx="5" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
+<text x="107.0" y="517.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >E_core[amazing]</text>
+<line x1="184.0" y1="512.0" x2="214.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="32.0" y="533.0" width="150.0" height="26.0" rx="5" fill="#fbe0d3" stroke="#d4561f" stroke-width="1" />
+<text x="107.0" y="551.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >E_suf[&#x27;!&quot;&#x27;]</text>
+<line x1="184.0" y1="546.0" x2="214.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<circle cx="228" cy="496" r="13" fill="#ffffff" stroke="#55544f" stroke-width="1.4"/>
+<text x="228.0" y="502.0" font-size="18" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >+</text>
+<line x1="242.0" y1="496.0" x2="282.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="284.0" y="451.0" width="160.0" height="90.0" rx="10" fill="#f4f3ee" stroke="#55544f" stroke-width="1.4" />
+<text x="364.0" y="491.0" font-size="15" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Transformer</text>
+<text x="364.0" y="511.0" font-size="12" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >(unchanged)</text>
+<line x1="446.0" y1="496.0" x2="486.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="490.0" y="469.0" width="112.0" height="54.0" rx="8" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1.2" />
+<text x="546.0" y="491.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >prefix</text>
+<text x="546.0" y="511.0" font-size="10.5" fill="#55544f" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >p(pre | h)</text>
+<rect x="614.0" y="469.0" width="112.0" height="54.0" rx="8" fill="#d3f0e4" stroke="#138a60" stroke-width="1.2" />
+<text x="670.0" y="491.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >core</text>
+<text x="670.0" y="511.0" font-size="10.5" fill="#55544f" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >p(core | h, pre)</text>
+<line x1="602.0" y1="496.0" x2="613.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="738.0" y="469.0" width="112.0" height="54.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1.2" />
+<text x="794.0" y="491.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >variation</text>
+<text x="794.0" y="511.0" font-size="10.5" fill="#55544f" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >p(var | h, …)</text>
+<line x1="726.0" y1="496.0" x2="737.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="862.0" y="469.0" width="112.0" height="54.0" rx="8" fill="#fbe0d3" stroke="#d4561f" stroke-width="1.2" />
+<text x="918.0" y="491.0" font-size="13" fill="#1f1f1c" text-anchor="middle" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >suffix</text>
+<text x="918.0" y="511.0" font-size="10.5" fill="#55544f" text-anchor="middle" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >p(suf | h, …)</text>
+<line x1="850.0" y1="496.0" x2="861.0" y2="496.0" stroke="#8c8b85" stroke-width="1.6" marker-end="url(#arr)"/>
+<text x="490.0" y="453.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >chained output head: each part conditioned on the ones before</text>
+<text x="490.0" y="549.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Output tables are tied to the input tables; the product is a proper</text>
+<text x="490.0" y="565.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >distribution over tuples, so bits-per-byte is directly comparable.</text>
+</svg>

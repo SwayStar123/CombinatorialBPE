@@ -1,0 +1,18 @@
+# environments / caches
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.pytest_tmp/
+
+# downloaded corpora and token caches (see scripts/download_data.py)
+/data/
+
+# all trained tokenizers from the benchmarks (~150 MB); a few are shipped in pretrained/
+results/tokenizers/
+results/*.log
+
+# scratch
+figures/_preview*
