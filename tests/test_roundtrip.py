@@ -81,7 +81,8 @@ def test_roundtrip_real_text(name):
         assert t.decode(t.encode(test)) == test
 
 
-@pytest.mark.parametrize("kw", [dict(fold_case=False), dict(n_prefix=0, n_suffix=0), dict(punct_to_next=True)])
+@pytest.mark.parametrize("kw", [dict(fold_case=False), dict(n_prefix=0, n_suffix=0), dict(punct_to_next=True),
+                                dict(split_camel=True)])
 def test_ablations_roundtrip(kw):
     t = CombinatorialBPE.train(TRAIN, 400, min_char_freq=5, min_affix_freq=5, **kw)
     assert t.vocab_size <= 400
@@ -118,3 +119,24 @@ def test_pretrained_roundtrip():
         t = load(os.path.join(root, f))
         for s in HARD + HAN:
             assert t.decode(t.encode(s)) == s, (f, s)
+
+
+CODE = """def getUserName(self, userId: int) -> str:
+    \"\"\"Return the XMLHttpRequest user.\"\"\"
+    if self.HTTPServer is None:
+        return MAX_RETRIES + parseJSONResponse(userId)[0]
+	public static void main(String[] args) { System.out.println("iPhone"); }
+"""
+
+
+@pytest.mark.parametrize("split_camel", [False, True])
+def test_code_roundtrip(split_camel):
+    from collections import Counter
+    t = CombinatorialBPE.train(CODE * 40 + TRAIN, 500, min_char_freq=5, min_affix_freq=5, split_camel=split_camel)
+    assert t.decode(t.encode(CODE)) == CODE
+    stats = Counter()
+    for w in ["getUserName", "parseJSONResponse", "XMLHttpRequest"]:
+        t._encode_word(w, stats)
+    assert stats["chars"] == len("getUserName" + "parseJSONResponse" + "XMLHttpRequest")
+    if split_camel:  # every camel part has a clean case pattern -> no per-character fallback
+        assert stats["fallback_chars"] == 0

@@ -1,0 +1,9 @@
+{
+ "cl100k_base_chars_per_token": {
+  "code_python": 4.185890439305842,
+  "code_java": 4.573867155113461,
+  "code_javascript": 4.028078663902569,
+  "code_cpp": 3.8625477059557363,
+  "code_go": 3.5942646011999595
+ }
+}

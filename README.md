@@ -23,6 +23,9 @@ trailing punctuation.
 - **Standard BPE cannot catch up by growing its vocabulary.** On English it saturates at ~4.86
   chars/token even with 262k entries. Combinatorial BPE reaches 5.20 with 16k rows, and matches
   a 128k standard vocab with 9.3k rows.
+- **On source code the gain is much larger: 54–83% more characters per token** than standard
+  BPE at equal budget. A 16k-row vocabulary with camelCase splitting needs 32–40% fewer tokens
+  than GPT-4's 100k-entry `cl100k_base` on Python, Java, JavaScript, C++ and Go, because indentation (`'\n        '`) and call syntax (`'();'`) fold into the tokens.
 - **Everything except the case rules is learned.** Prefixes, suffixes, cores and the budget
   split between them are learned from data. For Japanese and Chinese the learned suffixes turn
   out to be `，` `。` `、` `」`, and the prefixes include `「` `《` and the full-width space.
@@ -54,6 +57,10 @@ trailing punctuation.
 - **The budget split is learned.** Each affix saves about `freq(affix)` tokens and each BPE merge
   saves about `count(merge)`. Training keeps the best *N* of both. BPE merge lists can be cut at
   any point, so the rest is well defined. The affixes end up tiny: 1–2% of the budget.
+- **camelCase splitting for code** (`split_camel=True`). Identifiers are split at case changes
+  (`getUserName` -> `get|User|Name`, `HTTPServer` -> `HTTP|Server`) before core BPE, so every
+  piece has a clean case pattern. Without it, merges straddle case boundaries and up to 18% of
+  identifier characters fall back to per-character encoding.
 - **Traditional/Simplified Chinese** (`fold_han=True`). Cores are stored in Simplified, and a
   Traditional character is folded only when OpenCC's default mapping gives it back exactly.
   臺灣 and 台湾 then share the same cores and differ only in the variation.
@@ -78,7 +85,7 @@ for v, p, c, s in ids:
 
 # train your own
 text = open("my_corpus.txt", encoding="utf-8").read()
-tok = CombinatorialBPE.train(text, vocab_size=16384)            # fold_han=True for Chinese
+tok = CombinatorialBPE.train(text, vocab_size=16384)            # fold_han=True for Chinese, split_camel=True for code
 tok.save("my_tokenizer.json")
 print(tok.sizes)   # {'variation': 3, 'prefix': ..., 'core': ..., 'suffix': ...}
 ```
@@ -124,6 +131,43 @@ corpora.
 - **The gain is largest for inflected, cased languages** (Russian, Turkish).
 - **On Chinese, the Traditional variation adds 4–9%.** About 17% of a standard Chinese vocabulary
   is Traditional/Simplified twins (區/区, 臺灣/台湾); the variation removes them by construction.
+
+### Source code
+
+Five languages from `codeparrot/github-code-clean` (~20 MB of training text each, 10 MB for Go),
+with train/test split **by repository** and minified files removed. Chars/token on held-out
+repositories:
+
+| language | BPE, GPT-2 regex, 16k | BPE, cl100k regex, 16k | GPT-4 `cl100k_base`, 100k | **Comb + camel, 16k** | gain vs best 16k BPE |
+|---|---:|---:|---:|---:|---:|
+| Python | 3.53 | 3.80 | 4.19 | **6.46** | +70% |
+| Java | 3.86 | 4.19 | 4.57 | **6.76** | +61% |
+| JavaScript | 3.47 | 3.70 | 4.03 | **6.76** | +83% |
+| C++ | 3.27 | 3.52 | 3.86 | **6.21** | +76% |
+| Go | 3.01 | 3.43 | 3.59 | **5.87** | +71% |
+
+- **Indentation and syntax fold into the tokens.** Learned prefixes include `'\n        '`,
+  `' = '`, `' == '`, `' {\n        '`, `'\n    }\n\n    '` and `'\n * '`; learned suffixes include
+  `'();'`, `'());'`, `'("'`, `"'):"` and `'().'`. The learned budget split gives affixes ~12% of
+  the rows on code (1,116 prefixes + 900 suffixes for Python at 16k) vs ~1% on prose.
+- **camelCase splitting is essential.** Without it, compression *drops* as the vocabulary grows
+  (Java: 4.84 at 4k → 4.13 at 64k), because longer merges cross case boundaries and those pieces
+  fall back to per-character encoding (18.5% of identifier characters at 64k). With the split the
+  fallback is 0% and compression keeps rising (Java 5.80 → 6.98).
+- **Language model on JavaScript** (same 8-layer GPT, 2,500 steps × 16k tokens, 300M characters
+  of training repositories, validation on unseen repositories):
+
+  | tokenizer (16k) | chars/token | val bpb |
+  |---|---:|---:|
+  | **BPE, cl100k regex** | 3.74 | **0.919** |
+  | BPE, GPT-2 regex | 3.51 | 0.939 |
+  | Comb + camel | 6.68 | 0.961 (+4.5%) |
+
+  The gap to the best baseline shrinks steadily during training: +15% at step 1,000, +12% at
+  1,500, +6.3% at 2,000, +4.5% at 2,500. The combinatorial model is still improving fastest at
+  the end. The affixes are the costly part: prefix + suffix cost 0.27 bpb (vs 0.14 on English),
+  because prefixes such as `'\n    }\n\n    '` pack closing braces and layout into one
+  prediction made by the small output head.
 
 ### Language modelling
 
@@ -186,6 +230,8 @@ python scripts/download_data.py --langs ja zh --chars 20e6
 python -m pytest                                        # round-trip tests incl. real text in 8 languages
 python experiments/bench_compression.py                 # compression: 10 corpora x 5 budgets + ablations
 python experiments/bench_han.py                         # Chinese Traditional variation
+python scripts/download_data.py --code                  # Python/Java/JS/C++/Go from github-code-clean
+python experiments/bench_code.py                        # source code (+ GPT-4 cl100k_base reference if tiktoken installed)
 python experiments/bench_iso.py                         # English compression up to 256k vocab (token-count matching)
 python experiments/lm.py results/tokenizers/wiki_en_16384_bpe_gpt2.json \
     results/tokenizers/wiki_en_16384_comb.json --head chain --order 1,2,0,3
@@ -209,6 +255,7 @@ scripts/build_han_tables.py      OpenCC -> cbpe/data/han_st.json
 scripts/make_figures.py          figures/*.svg from the pretrained tokenizers
 experiments/bench_compression.py chars/token at equal budget, with ablations
 experiments/bench_han.py         Chinese Traditional variation benchmark
+experiments/bench_code.py        source-code compression with and without camelCase splitting
 experiments/bench_iso.py         English compression vs vocab size up to 256k (token-count matching)
 experiments/lm.py                small-GPT bits-per-byte comparison (factorised output heads)
 experiments/report.py            results/REPORT.md and plots

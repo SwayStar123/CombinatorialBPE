@@ -7,5 +7,6 @@ tokenizers
 huggingface_hub
 pyarrow
 opencc-python-reimplemented
+tiktoken        # optional: GPT-4 tokenizer reference in bench_code.py
 # tests
 pytest

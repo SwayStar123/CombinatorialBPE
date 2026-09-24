@@ -41,6 +41,8 @@ CL100K_PAT = regex.compile(
 # unit = <non-alnum run> <letters | digits> <non-space non-alnum run>   |   trailing junk
 COMB_PAT = regex.compile(
     r"([^\p{L}\p{M}\p{N}]*)([\p{L}\p{M}]+|\p{N}+)([^\s\p{L}\p{M}\p{N}]*)|([^\p{L}\p{M}\p{N}]+)")
+# optional split of identifiers at case changes: getUserName -> get|User|Name, HTTPServer -> HTTP|Server
+CAMEL_SPLIT = regex.compile(r"(?<=\p{Ll})(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})")
 # variant: trailing punctuation attaches to the *next* word's prefix (", which") -> no suffixes
 COMB_PAT_LEFT = regex.compile(r"([^\p{L}\p{M}\p{N}]*)([\p{L}\p{M}]+|\p{N}+)()|([^\p{L}\p{M}\p{N}]+)")
 
@@ -172,11 +174,12 @@ def n_variations(fold_case: bool, fold_han: bool) -> int:
 
 class CombinatorialBPE:
     def __init__(self, core: CharBPE, prefixes: list[str], suffixes: list[str], fold_case: bool = True,
-                 punct_to_next: bool = False, fold_han: bool = False):
+                 punct_to_next: bool = False, fold_han: bool = False, split_camel: bool = False):
         assert prefixes[0] == "" and suffixes[0] == ""
         self.core = core
         self.fold_case = fold_case
         self.fold_han = fold_han
+        self.split_camel = split_camel
         self.punct_to_next = punct_to_next
         self.prefixes = list(prefixes)
         self.suffixes = list(suffixes)
@@ -197,8 +200,16 @@ class CombinatorialBPE:
         return sum(self.sizes.values())
 
     # --------------------------------------------------------------- encode
-    def _encode_word(self, word: str) -> list[tuple[int, int]]:
-        """-> list of (variation, core_id)."""
+    def _encode_word(self, word: str, stats: Counter | None = None) -> list[tuple[int, int]]:
+        """-> list of (variation, core_id). `stats` (optional) counts chars that needed the
+        per-character fallback ("fallback_chars") out of all chars ("chars")."""
+        if self.split_camel:
+            return [t for part in CAMEL_SPLIT.split(word) for t in self._encode_segment(part, stats)]
+        return self._encode_segment(word, stats)
+
+    def _encode_segment(self, word: str, stats: Counter | None = None) -> list[tuple[int, int]]:
+        if stats is not None:
+            stats["chars"] += len(word)
         if not (self.fold_case or self.fold_han):
             return [(V_NONE, c) for c in self.core.encode(word)]
         norm, flags = [], []
@@ -221,6 +232,8 @@ class CombinatorialBPE:
             if v is not None:
                 out.append((v, cid))
             else:  # mixed case / script inside one piece (e.g. "cDo"): per character
+                if stats is not None:
+                    stats["fallback_chars"] += n
                 for ch, o, fl in zip(piece, orig, f):
                     ci = core.tok2id.get(ch)
                     if ci is None:
@@ -293,13 +306,17 @@ class CombinatorialBPE:
     @staticmethod
     def train(text: str, vocab_size: int, min_char_freq=20, max_affix_candidates=2000,
               min_affix_freq=10, max_affix_len=16, n_prefix=None, n_suffix=None,
-              fold_case=True, punct_to_next=False, fold_han=False, verbose=False) -> "CombinatorialBPE":
+              fold_case=True, punct_to_next=False, fold_han=False, split_camel=False,
+              verbose=False) -> "CombinatorialBPE":
         """If n_prefix / n_suffix are None the affix/core budget split is learned.
         fold_case=False / n_prefix=n_suffix=0 give the ablations (affixes only / case only)."""
         word_counts, pre_counts, suf_counts, junk_counts = Counter(), Counter(), Counter(), Counter()
         for pre, word, suf in unit_parts(text, punct_to_next):
             if word:
-                word_counts[word] += 1
+                if split_camel:
+                    word_counts.update(CAMEL_SPLIT.split(word))
+                else:
+                    word_counts[word] += 1
                 pre_counts[pre] += 1
                 suf_counts[suf] += 1
             else:
@@ -341,13 +358,14 @@ class CombinatorialBPE:
                                                fold_case, fold_han)
         core_size = vocab_size - n_var - len(prefixes) - len(suffixes)
         core = CharBPE.train(corpus, core_size, min_char_freq, verbose)
-        return CombinatorialBPE(core, prefixes, suffixes, fold_case, punct_to_next, fold_han)
+        return CombinatorialBPE(core, prefixes, suffixes, fold_case, punct_to_next, fold_han, split_camel)
 
     # ------------------------------------------------------------------- io
     def save(self, path):
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"type": "combinatorial", "prefixes": self.prefixes, "suffixes": self.suffixes,
                        "fold_case": self.fold_case, "punct_to_next": self.punct_to_next, "fold_han": self.fold_han,
+                       "split_camel": self.split_camel,
                        **self.core.to_dict()}, f, ensure_ascii=False)
 
 
@@ -357,4 +375,4 @@ def load(path):
     if d["type"] == "standard":
         return StandardBPE(CharBPE.from_dict(d), d["pattern"])
     return CombinatorialBPE(CharBPE.from_dict(d), d["prefixes"], d["suffixes"], d.get("fold_case", True),
-                            d.get("punct_to_next", False), d.get("fold_han", False))
+                            d.get("punct_to_next", False), d.get("fold_han", False), d.get("split_camel", False))

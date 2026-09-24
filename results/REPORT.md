@@ -141,7 +141,41 @@ wiki_zh mixes both scripts (~45% of convertible characters are Traditional). `co
 | 32768 | 1.594 | 1.686 | 2.006 | **2.094** | +4.4% | 20% | 17.1% / 17.9% / 0.0% |
 | 65536 | 1.716 | 1.837 | 2.198 | **2.286** | +4.0% | 21% | 16.6% / 17.4% / 0.0% |
 
-## Language modelling: English Wikipedia (same 8-layer GPT, 2500 steps x 16k tokens)
+### Source code (codeparrot/github-code-clean, train/test split by repository)
+
+`Comb + camel` splits identifiers at case changes (`getUserName` -> `get|User|Name`). *fallback* = share of identifier characters that needed per-character encoding because a core piece had mixed case.
+
+| corpus | vocab | BPE (GPT-2) | BPE (cl100k) | Comb | fallback | **Comb + camel** | gain vs best BPE | #prefix / #suffix |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| code_python | 4096 | 3.046 | 3.147 | 5.259 | 1.3% | **5.453** | +73% | 190 / 186 |
+| code_python | 8192 | 3.338 | 3.519 | 5.767 | 1.8% | **6.101** | +73% | 492 / 423 |
+| code_python | 16384 | 3.533 | 3.801 | 5.982 | 2.5% | **6.455** | +70% | 1116 / 900 |
+| code_python | 32768 | 3.654 | 4.007 | 6.049 | 3.1% | **6.653** | +66% | 1427 / 1104 |
+| code_python | 65536 | 3.730 | 4.143 | 6.038 | 3.7% | **6.754** | +63% | 1427 / 1104 |
+| code_java | 4096 | 3.291 | 3.475 | 4.837 | 5.8% | **5.799** | +67% | 233 / 116 |
+| code_java | 8192 | 3.628 | 3.891 | 4.791 | 9.4% | **6.413** | +65% | 557 / 268 |
+| code_java | 16384 | 3.855 | 4.189 | 4.540 | 13.0% | **6.758** | +61% | 1375 / 576 |
+| code_java | 32768 | 3.996 | 4.393 | 4.307 | 16.2% | **6.914** | +57% | 1375 / 576 |
+| code_java | 65536 | 4.096 | 4.544 | 4.127 | 18.5% | **6.976** | +54% | 1375 / 576 |
+| code_javascript | 4096 | 3.019 | 3.105 | 5.115 | 3.0% | **5.547** | +79% | 294 / 176 |
+| code_javascript | 8192 | 3.299 | 3.458 | 5.449 | 5.1% | **6.321** | +83% | 820 / 447 |
+| code_javascript | 16384 | 3.474 | 3.701 | 5.498 | 7.1% | **6.758** | +83% | 2001 / 956 |
+| code_javascript | 32768 | 3.579 | 3.873 | 5.361 | 9.0% | **6.961** | +80% | 2001 / 1240 |
+| code_javascript | 65536 | 3.643 | 3.976 | 5.136 | 11.4% | **7.041** | +77% | 2001 / 1240 |
+| code_cpp | 4096 | 2.801 | 2.931 | 4.977 | 2.0% | **5.279** | +80% | 267 / 159 |
+| code_cpp | 8192 | 3.073 | 3.272 | 5.234 | 3.9% | **5.883** | +80% | 704 / 341 |
+| code_cpp | 16384 | 3.266 | 3.524 | 5.104 | 6.5% | **6.212** | +76% | 1802 / 649 |
+| code_cpp | 32768 | 3.390 | 3.710 | 4.944 | 8.9% | **6.389** | +72% | 2001 / 791 |
+| code_cpp | 65536 | 3.472 | 3.848 | 4.767 | 11.0% | **6.473** | +68% | 2001 / 791 |
+| code_go | 4096 | 2.656 | 2.898 | 4.439 | 4.9% | **5.193** | +79% | 273 / 158 |
+| code_go | 8192 | 2.876 | 3.213 | 4.400 | 8.4% | **5.640** | +76% | 675 / 344 |
+| code_go | 16384 | 3.006 | 3.429 | 4.260 | 11.2% | **5.871** | +71% | 912 / 463 |
+| code_go | 32768 | 3.086 | 3.575 | 4.134 | 13.1% | **5.963** | +67% | 912 / 463 |
+| code_go | 65536 | 3.135 | 3.676 | 3.997 | 15.1% | **5.963** | +62% | 912 / 463 |
+
+Production reference, GPT-4's `cl100k_base` (100k vocab): python 4.19, java 4.57, javascript 4.03, cpp 3.86, go 3.59 chars/token.
+
+## Language modelling: English (same 8-layer GPT, 2500 steps x 16k tokens)
 
 | run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
 |---|---:|---:|---:|---:|---|
@@ -159,7 +193,7 @@ wiki_zh mixes both scripts (~45% of convertible characters are Traditional). `co
 
 ![lm](lm.png)
 
-## Language modelling: Chinese Wikipedia (same 8-layer GPT, 2500 steps x 16k tokens)
+## Language modelling: Chinese (same 8-layer GPT, 2500 steps x 16k tokens)
 
 | run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
 |---|---:|---:|---:|---:|---|
@@ -172,7 +206,7 @@ wiki_zh mixes both scripts (~45% of convertible characters are Traditional). `co
 
 ![lm_zh](lm_zh.png)
 
-## Language modelling: English (equal token count) Wikipedia (same 8-layer GPT, 2500 steps x 16k tokens)
+## Language modelling: English (equal token count) (same 8-layer GPT, 2500 steps x 16k tokens)
 
 | run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
 |---|---:|---:|---:|---:|---|
@@ -184,4 +218,16 @@ wiki_zh mixes both scripts (~45% of convertible characters are Traditional). `co
 \* learning curve interpolated at 156M training bytes (what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.
 
 ![lm_iso](lm_iso.png)
+
+## Language modelling: JavaScript (same 8-layer GPT, 2500 steps x 16k tokens)
+
+| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
+|---|---:|---:|---:|---:|---|
+| BPE (GPT-2 regex) 16k | 33.8M | 3.51 | **0.9385** | 0.9385 | - |
+| BPE (cl100k regex) 16k | 33.8M | 3.74 | **0.9188** | 0.9235 | - |
+| Comb + camel 16k, chain head (prefix first) | 36.2M | 6.68 | **0.9605** | 1.2232 | 0.017 / 0.128 / 0.678 / 0.138 |
+
+\* learning curve interpolated at 144M training bytes (what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.
+
+![lm_js](lm_js.png)
 

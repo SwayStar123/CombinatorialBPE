@@ -103,15 +103,42 @@ def han(lines):
     lines.append("")
 
 
+def code(lines):
+    path = os.path.join(RES, "code.json")
+    if not os.path.exists(path):
+        return
+    rows = json.load(open(path, encoding="utf-8"))
+    ref_path = os.path.join(RES, "code_tiktoken.json")
+    ref = json.load(open(ref_path))["cl100k_base_chars_per_token"] if os.path.exists(ref_path) else {}
+    lines += ["### Source code (codeparrot/github-code-clean, train/test split by repository)", "",
+              "`Comb + camel` splits identifiers at case changes (`getUserName` -> `get|User|Name`). "
+              "*fallback* = share of identifier characters that needed per-character encoding "
+              "because a core piece had mixed case.", "",
+              "| corpus | vocab | BPE (GPT-2) | BPE (cl100k) | Comb | fallback | **Comb + camel** | gain vs best BPE | "
+              "#prefix / #suffix |", "|---|---:|---:|---:|---:|---:|---:|---:|---|"]
+    for r in rows:
+        best = max(r["bpe_gpt2"]["chars_per_token"], r["bpe_cl100k"]["chars_per_token"])
+        c, cc = r["comb"], r["comb_camel"]
+        lines.append(f"| {r['corpus']} | {r['vocab']} | {r['bpe_gpt2']['chars_per_token']:.3f} | "
+                     f"{r['bpe_cl100k']['chars_per_token']:.3f} | {c['chars_per_token']:.3f} | "
+                     f"{100 * c['fallback_char_share']:.1f}% | **{cc['chars_per_token']:.3f}** | "
+                     f"{100 * (cc['chars_per_token'] / best - 1):+.0f}% | "
+                     f"{cc['sizes']['prefix']} / {cc['sizes']['suffix']} |")
+    if ref:
+        lines += ["", "Production reference, GPT-4's `cl100k_base` (100k vocab): " + ", ".join(
+            f"{k.replace('code_', '')} {v:.2f}" for k, v in ref.items()) + " chars/token."]
+    lines.append("")
+
+
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#8a5cd6", "#6b6b66"]
 
 
 def run_name(r):
     size = re.search(r"_(\d+)_", r["tokenizer"]).group(1)
-    tok = re.sub(r"^wiki_[a-z]+_\d+_", "", r["tokenizer"].replace(".json", ""))
+    tok = re.sub(r"^(wiki|code)_[a-z]+_\d+_", "", r["tokenizer"].replace(".json", ""))
     if tok.startswith("bpe_"):
         return {"bpe_gpt2": "BPE (GPT-2 regex)", "bpe_cl100k": "BPE (cl100k regex)"}[tok] + f" {int(size) // 1024}k"
-    tok = {"comb": "Comb", "comb_punctnext": "Comb, punct->next prefix", "comb_han": "Comb + Traditional"}.get(tok, tok)
+    tok = {"comb": "Comb", "comb_punctnext": "Comb, punct->next prefix", "comb_han": "Comb + Traditional", "comb_camel": "Comb + camel"}.get(tok, tok)
     head = {"linear": "linear head", "mlp": "MLP head", "chain": "chain head (core first)",
             "chain_prefix_first": "chain head (prefix first)",
             "chain_prefix_first_10L_eqflops": "chain (prefix first), 10 layers, 1906 steps = equal FLOPs & data"}.get(r.get("tag"), r.get("tag"))
@@ -123,7 +150,7 @@ def lm(lines, name="lm", lang="English"):
     if not os.path.exists(path):
         return
     runs = json.load(open(path))
-    lines += [f"## Language modelling: {lang} Wikipedia (same 8-layer GPT, 2500 steps x 16k tokens)", "",
+    lines += [f"## Language modelling: {lang} (same 8-layer GPT, 2500 steps x 16k tokens)", "",
               "| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | "
               "bpb parts: case / prefix / core / suffix |",
               "|---|---:|---:|---:|---:|---|"]
@@ -166,7 +193,7 @@ def lm(lines, name="lm", lang="English"):
         ax.set_ylim(lo * 0.99, lo * 1.2)
     h, l = axes[0].get_legend_handles_labels()
     fig.legend(h, l, loc="lower center", ncol=2, frameon=False, fontsize=9)
-    fig.suptitle(f"Small GPT on {lang} Wikipedia (lower is better)", x=0.01, ha="left", fontsize=13)
+    fig.suptitle(f"Small GPT on {lang} (lower is better)", x=0.01, ha="left", fontsize=13)
     fig.tight_layout(rect=(0, 0.2, 1, 1))
     fig.savefig(os.path.join(RES, f"{name}.png"), dpi=130)
     lines += [f"![{name}]({name}.png)", ""]
@@ -176,9 +203,11 @@ if __name__ == "__main__":
     lines = ["# Combinatorial BPE - results", ""]
     compression(lines)
     han(lines)
+    code(lines)
     lm(lines)
     lm(lines, "lm_zh", "Chinese")
     lm(lines, "lm_iso", "English (equal token count)")
+    lm(lines, "lm_js", "JavaScript")
     with open(os.path.join(RES, "REPORT.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print("\n".join(lines))
