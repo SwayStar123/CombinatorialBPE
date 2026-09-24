@@ -126,35 +126,48 @@ def code(targets=CODE_LANGS, test_frac=0.1):
 
 
 def code_lm(lang="JavaScript", target_chars=300e6, first_shard=1, test_frac=0.1, suffix="_lm"):
-    """LM training text for one language: shards after the tokenizer data, and only repositories
-    on the train side of the same repo-hash split, so the test repos stay unseen."""
+    """LM training text for one language (see code_lm_multi)."""
+    code_lm_multi({lang: target_chars}, first_shard, test_frac, suffix)
+
+
+def code_lm_multi(targets, first_shard=1, test_frac=0.1, suffix="_lm"):
+    """LM training text for several languages in one pass: shards after the tokenizer data, and
+    only repositories on the train side of the same repo-hash split, so the test repos stay unseen."""
     import zlib
     fs = HfFileSystem()
     root = "datasets/codeparrot/github-code-clean/data"
     shards = sorted(p for p in fs.ls(root, detail=False) if p.endswith(".parquet"))[first_shard:]
-    out, total = [], 0
+    out = {l: [] for l in targets}
+    total = {l: 0 for l in targets}
+
+    def done():
+        return all(total[l] >= targets[l] for l in targets)
+
     for shard in shards:
         with fs.open(shard, "rb", block_size=8 * 2**20) as fh:
             pf = pq.ParquetFile(fh)
             for rg in range(pf.num_row_groups):
                 t = pf.read_row_group(rg, columns=["language", "repo_name", "code"])
                 for l, repo, src in zip(*(t.column(c).to_pylist() for c in ("language", "repo_name", "code"))):
-                    if l != lang or zlib.crc32(repo.encode()) % 100 < 100 * test_frac:
+                    if l not in targets or total[l] >= targets[l]:
+                        continue
+                    if zlib.crc32(repo.encode()) % 100 < 100 * test_frac:
                         continue
                     if len(src) > 100_000 or max(map(len, src.splitlines() or [""])) > 1000:
                         continue
-                    out.append(src.strip("\n"))
-                    total += len(src)
-                print(f"  {lang} {total / 1e6:.0f}M chars", flush=True)
-                if total >= target_chars:
+                    out[l].append(src.strip("\n"))
+                    total[l] += len(src)
+                print("  " + "  ".join(f"{l} {total[l] / 1e6:.0f}M" for l in targets), flush=True)
+                if done():
                     break
-        if total >= target_chars:
+        if done():
             break
-    name = "code_" + {"C++": "cpp", "GO": "go"}.get(lang, lang.lower())
-    path = os.path.join(DATA, f"{name}{suffix}.txt")
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n\n".join(out))
-    print(f"{path}: {len(out)} files, {total / 1e6:.0f}M chars")
+    for lang, docs in out.items():
+        name = "code_" + {"C++": "cpp", "GO": "go"}.get(lang, lang.lower())
+        path = os.path.join(DATA, f"{name}{suffix}.txt")
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n\n".join(docs))
+        print(f"{path}: {len(docs)} files, {total[lang] / 1e6:.0f}M chars")
 
 
 if __name__ == "__main__":

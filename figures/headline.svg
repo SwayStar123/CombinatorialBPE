@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 612" width="1000" height="612" role="img" aria-labelledby="t d">
+<title id="t">Combinatorial BPE vs standard BPE on 11 languages</title>
+<desc id="d">32% fewer tokens and 3.7% lower bits per byte overall, better on all 11 sources.</desc>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8c8b85"/></marker></defs>
+<rect width="1000" height="612" rx="14" fill="#ffffff" stroke="#e3e2dc"/>
+<text x="32.0" y="44.0" font-size="20" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >One tokenizer, one model, 11 languages: Combinatorial vs standard BPE</text>
+<text x="32.0" y="68.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Same 32,768 embedding rows, same 8-layer GPT, same compute (22,500 steps × 16k tokens) on Wikipedia in 6 languages + GitHub code in 5 languages.</text>
+<text x="210.0" y="112.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Fewer tokens for the same text</text>
+<text x="615.0" y="112.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Better language model (lower bits/byte)</text>
+<line x1="210.0" y1="130.0" x2="210.0" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="210.0" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >0%</text>
+<line x1="265.8" y1="130.0" x2="265.8" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="265.8" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >10%</text>
+<line x1="321.7" y1="130.0" x2="321.7" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="321.7" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >20%</text>
+<line x1="377.5" y1="130.0" x2="377.5" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="377.5" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >30%</text>
+<line x1="433.3" y1="130.0" x2="433.3" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="433.3" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >40%</text>
+<line x1="489.2" y1="130.0" x2="489.2" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="489.2" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >50%</text>
+<line x1="545.0" y1="130.0" x2="545.0" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="545.0" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >60%</text>
+<line x1="615.0" y1="130.0" x2="615.0" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="615.0" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >0%</text>
+<line x1="682.0" y1="130.0" x2="682.0" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="682.0" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >2%</text>
+<line x1="749.0" y1="130.0" x2="749.0" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="749.0" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >4%</text>
+<line x1="816.0" y1="130.0" x2="816.0" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="816.0" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >6%</text>
+<line x1="883.0" y1="130.0" x2="883.0" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="883.0" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >8%</text>
+<line x1="950.0" y1="130.0" x2="950.0" y2="584.0" stroke="#efeee9" stroke-width="1" />
+<text x="950.0" y="126.0" font-size="10" fill="#8c8b85" text-anchor="middle" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >10%</text>
+<text x="32.0" y="159.0" font-size="14" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >All sources (mixed)</text>
+<rect x="210.0" y="147.0" width="180.3" height="18.0" rx="3" fill="#138a60" />
+<text x="396.3" y="160.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >32.3%</text>
+<rect x="615.0" y="147.0" width="123.5" height="18.0" rx="3" fill="#138a60" />
+<text x="744.5" y="160.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >3.7%</text>
+<text x="32.0" y="198.0" font-size="11" fill="#8c8b85" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" letter-spacing="1">CODE</text>
+<text x="32.0" y="223.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Python</text>
+<rect x="210.0" y="211.0" width="255.2" height="18.0" rx="3" fill="#1baf7a" />
+<text x="471.2" y="224.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >45.7%</text>
+<rect x="615.0" y="211.0" width="294.2" height="18.0" rx="3" fill="#1baf7a" />
+<text x="915.2" y="224.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >8.8%</text>
+<text x="32.0" y="253.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Go</text>
+<rect x="210.0" y="241.0" width="279.0" height="18.0" rx="3" fill="#1baf7a" />
+<text x="495.0" y="254.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >50.0%</text>
+<rect x="615.0" y="241.0" width="252.3" height="18.0" rx="3" fill="#1baf7a" />
+<text x="873.3" y="254.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >7.5%</text>
+<text x="32.0" y="283.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Java</text>
+<rect x="210.0" y="271.0" width="232.1" height="18.0" rx="3" fill="#1baf7a" />
+<text x="448.1" y="284.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >41.6%</text>
+<rect x="615.0" y="271.0" width="197.9" height="18.0" rx="3" fill="#1baf7a" />
+<text x="818.9" y="284.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >5.9%</text>
+<text x="32.0" y="313.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >JavaScript</text>
+<rect x="210.0" y="301.0" width="264.6" height="18.0" rx="3" fill="#1baf7a" />
+<text x="480.6" y="314.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >47.4%</text>
+<rect x="615.0" y="301.0" width="145.3" height="18.0" rx="3" fill="#1baf7a" />
+<text x="766.3" y="314.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >4.3%</text>
+<text x="32.0" y="343.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >C++</text>
+<rect x="210.0" y="331.0" width="259.2" height="18.0" rx="3" fill="#1baf7a" />
+<text x="475.2" y="344.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >46.4%</text>
+<rect x="615.0" y="331.0" width="137.8" height="18.0" rx="3" fill="#1baf7a" />
+<text x="758.8" y="344.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >4.1%</text>
+<text x="32.0" y="374.0" font-size="11" fill="#8c8b85" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" letter-spacing="1">NATURAL LANGUAGE</text>
+<text x="32.0" y="399.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Russian</text>
+<rect x="210.0" y="387.0" width="141.1" height="18.0" rx="3" fill="#1baf7a" />
+<text x="357.1" y="400.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >25.3%</text>
+<rect x="615.0" y="387.0" width="160.4" height="18.0" rx="3" fill="#1baf7a" />
+<text x="781.4" y="400.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >4.8%</text>
+<text x="32.0" y="429.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >German</text>
+<rect x="210.0" y="417.0" width="133.6" height="18.0" rx="3" fill="#1baf7a" />
+<text x="349.6" y="430.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >23.9%</text>
+<rect x="615.0" y="417.0" width="118.7" height="18.0" rx="3" fill="#1baf7a" />
+<text x="739.7" y="430.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >3.5%</text>
+<text x="32.0" y="459.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Chinese</text>
+<rect x="210.0" y="447.0" width="123.7" height="18.0" rx="3" fill="#1baf7a" />
+<text x="339.7" y="460.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >22.2%</text>
+<rect x="615.0" y="447.0" width="117.9" height="18.0" rx="3" fill="#1baf7a" />
+<text x="738.9" y="460.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >3.5%</text>
+<text x="32.0" y="489.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >French</text>
+<rect x="210.0" y="477.0" width="133.8" height="18.0" rx="3" fill="#1baf7a" />
+<text x="349.8" y="490.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >24.0%</text>
+<rect x="615.0" y="477.0" width="90.4" height="18.0" rx="3" fill="#1baf7a" />
+<text x="711.4" y="490.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >2.7%</text>
+<text x="32.0" y="519.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >English</text>
+<rect x="210.0" y="507.0" width="134.5" height="18.0" rx="3" fill="#1baf7a" />
+<text x="350.5" y="520.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >24.1%</text>
+<rect x="615.0" y="507.0" width="89.4" height="18.0" rx="3" fill="#1baf7a" />
+<text x="710.4" y="520.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >2.7%</text>
+<text x="32.0" y="549.0" font-size="13" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Japanese</text>
+<rect x="210.0" y="537.0" width="129.7" height="18.0" rx="3" fill="#1baf7a" />
+<text x="345.7" y="550.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >23.2%</text>
+<rect x="615.0" y="537.0" width="72.3" height="18.0" rx="3" fill="#1baf7a" />
+<text x="693.3" y="550.0" font-size="12" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >2.2%</text>
+<text x="32.0" y="576.0" font-size="11" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Bits per byte on held-out text is tokenizer-independent; standard BPE = byte-level BPE with GPT-2 pretokenization trained on the same data (the stronger of two baselines).</text>
+<text x="32.0" y="593.0" font-size="11" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Combinatorial BPE is also better at equal data (−1.0%) and on every source; with 3× less training the two are roughly level. Single seed, 42–45M-parameter models.</text>
+</svg>

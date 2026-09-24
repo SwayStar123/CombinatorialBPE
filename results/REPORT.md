@@ -253,3 +253,60 @@ Production reference, GPT-4's `cl100k_base` (100k vocab): python 4.19, java 4.57
 
 ![lm_en_long](lm_en_long.png)
 
+## Language modelling: mixed prose (6 languages) + code (5 languages), 32k budget (same 8-layer GPT, 7500 steps x 16k tokens)
+
+| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
+|---|---:|---:|---:|---:|---|
+| BPE (cl100k regex) 32k | 42.2M | 3.73 | **1.4989** | 1.5014 | - |
+| BPE (GPT-2 regex) 32k | 42.2M | 3.62 | **1.4759** | 1.4759 | - |
+| Comb 32k, chain head (prefix first) | 44.6M | 5.23 | **1.4678** | 1.5258 | 0.020 / 0.075 / 1.245 / 0.127 |
+
+\* learning curve interpolated at 445M training bytes (what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.
+
+Final bits-per-byte per source:
+
+| source | BPE (cl100k regex) 32k | BPE (GPT-2 regex) 32k | Comb 32k, chain head (prefix first) |
+|---|---:|---:|---:|
+| cpp | 1.2466 | **1.2184** | 1.2417 |
+| de | 1.7857 | 1.7785 | **1.7557** |
+| en | 1.6859 | 1.6770 | **1.6767** |
+| fr | 1.7370 | 1.7162 | **1.7088** |
+| go | 1.1350 | 1.0985 | **1.0833** |
+| ja | 1.5125 | **1.4773** | 1.4900 |
+| java | 0.9414 | 0.9108 | **0.9081** |
+| javascript | 1.2232 | **1.1771** | 1.2145 |
+| python | 1.1745 | 1.1427 | **1.1178** |
+| ru | 1.0354 | 1.0315 | **0.9982** |
+| zh | 2.0573 | 2.0328 | **2.0005** |
+
+![lm_mix](lm_mix.png)
+
+## Language modelling: mixed prose + code, 3x longer (22,500 steps), 32k budget (same 8-layer GPT, 22500 steps x 16k tokens)
+
+| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
+|---|---:|---:|---:|---:|---|
+| BPE (GPT-2 regex) 32k | 42.2M | 3.61 | **1.3094** | 1.3094 | - |
+| Comb 32k, chain head (prefix first) | 44.6M | 5.23 | **1.2611** | 1.2967 | 0.017 / 0.060 / 1.079 / 0.105 |
+
+\* learning curve interpolated at 1330M training bytes (what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.
+
+Final bits-per-byte per source:
+
+| source | BPE (GPT-2 regex) 32k | Comb 32k, chain head (prefix first) |
+|---|---:|---:|
+| cpp | 1.0293 | **0.9869** |
+| de | 1.5719 | **1.5162** |
+| en | 1.5124 | **1.4720** |
+| fr | 1.4916 | **1.4513** |
+| go | 0.9309 | **0.8608** |
+| ja | 1.3380 | **1.3091** |
+| java | 0.7661 | **0.7209** |
+| javascript | 0.9981 | **0.9548** |
+| python | 0.9826 | **0.8963** |
+| ru | 0.8924 | **0.8497** |
+| zh | 1.8605 | **1.7950** |
+
+![lm_mix3x](lm_mix3x.png)
+
+![per-source trajectories](lm_mix3x_sources.png)
+

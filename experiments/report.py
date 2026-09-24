@@ -135,7 +135,7 @@ SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#8a
 
 def run_name(r):
     size = re.search(r"_(\d+)_", r["tokenizer"]).group(1)
-    tok = re.sub(r"^(wiki|code)_[a-z]+_\d+_", "", r["tokenizer"].replace(".json", ""))
+    tok = re.sub(r"^(?:(?:wiki|code)_[a-z]+_|mix_)\d+_", "", r["tokenizer"].replace(".json", ""))
     if tok.startswith("bpe_"):
         return {"bpe_gpt2": "BPE (GPT-2 regex)", "bpe_cl100k": "BPE (cl100k regex)"}[tok] + f" {int(size) // 1024}k"
     tok = {"comb": "Comb", "comb_punctnext": "Comb, punct->next prefix", "comb_han": "Comb + Traditional", "comb_camel": "Comb + camel"}.get(tok, tok)
@@ -173,6 +173,19 @@ def lm(lines, name="lm", lang="English"):
     lines += ["", f"\\* learning curve interpolated at {min_bytes / 1e6:.0f}M training bytes "
                   "(what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.", ""]
 
+    if any(r.get("final_by_source") for r in runs):
+        srcs = list(next(r for r in runs if r.get("final_by_source"))["final_by_source"])
+        lines += ["Final bits-per-byte per source:", "",
+                  "| source | " + " | ".join(run_name(r) for r in runs) + " |",
+                  "|---|" + "---:|" * len(runs)]
+        for src in srcs:
+            vals = [r.get("final_by_source", {}).get(src, {}).get("val_bpb") for r in runs]
+            best = min(v for v in vals if v is not None)
+            cells = [("-" if v is None else (f"**{v:.4f}**" if v == best else f"{v:.4f}")) for v in vals]
+            label = src.replace("val_mix_", "").replace(".txt", "")
+            lines.append(f"| {label} | " + " | ".join(cells) + " |")
+        lines.append("")
+
     fig, axes = plt.subplots(1, 2, figsize=(13, 6.2))
     n_comb = 0
     for r in runs:
@@ -200,6 +213,45 @@ def lm(lines, name="lm", lang="English"):
     lines += [f"![{name}]({name}.png)", ""]
 
 
+def source_trajectories(lines, name="lm_mix3x"):
+    """Per-source gap (combinatorial vs standard) over training, as small multiples."""
+    path = os.path.join(RES, f"{name}.json")
+    if not os.path.exists(path):
+        return
+    runs = json.load(open(path))
+    std = next((r for r in runs if "_bpe_" in r["tokenizer"]), None)
+    comb = next((r for r in runs if "_comb" in r["tokenizer"]), None)
+    if std is None or comb is None or "by_source" not in std["curve"][-1]:
+        return
+    steps = [p["step"] for p in std["curve"] if "by_source" in p]
+    cs = {p["step"]: p for p in comb["curve"] if "by_source" in p}
+    srcs = list(std["curve"][-1]["by_source"])
+    n, cols = len(srcs) + 1, 4
+    rows_ = (n + cols - 1) // cols
+    fig, axes = plt.subplots(rows_, cols, figsize=(14, 2.8 * rows_), sharex=True, sharey=True)
+    series = [("all (mixed validation)", [100 * (cs[s]["val_bpb"] / p["val_bpb"] - 1)
+                                          for s, p in zip(steps, (q for q in std["curve"] if "by_source" in q))])]
+    for src in srcs:
+        series.append((src.replace("val_mix_", "").replace(".txt", ""),
+                       [100 * (cs[st]["by_source"][src] / p["by_source"][src] - 1)
+                        for st, p in zip(steps, (q for q in std["curve"] if "by_source" in q))]))
+    for ax, (title, ys) in zip(axes.flat, series):
+        ax.axhline(0, color="#8c8b85", lw=1)
+        ax.plot(steps, ys, lw=2, color="#1baf7a" if ys[-1] < 0 else "#eb6834", marker="o", ms=3)
+        ax.set_title(f"{title}  ({ys[-1]:+.1f}%)", fontsize=10, loc="left")
+        style(ax)
+    for ax in axes.flat[n:]:
+        ax.axis("off")
+    for ax in axes[-1]:
+        ax.set_xlabel("training step")
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Comb vs BPE bpb (%)")
+    fig.suptitle("Mixed run, 3x longer: combinatorial vs standard BPE per source (below 0 = combinatorial better)",
+                 x=0.01, ha="left", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(os.path.join(RES, f"{name}_sources.png"), dpi=130)
+    lines += [f"![per-source trajectories]({name}_sources.png)", ""]
+
 if __name__ == "__main__":
     lines = ["# Combinatorial BPE - results", ""]
     compression(lines)
@@ -211,6 +263,9 @@ if __name__ == "__main__":
     lm(lines, "lm_js", "JavaScript")
     lm(lines, "lm_js_long", "JavaScript, 3x longer (7,500 steps)")
     lm(lines, "lm_en_long", "English Wikipedia, 3x longer (7,500 steps)")
+    lm(lines, "lm_mix", "mixed prose (6 languages) + code (5 languages), 32k budget")
+    lm(lines, "lm_mix3x", "mixed prose + code, 3x longer (22,500 steps), 32k budget")
+    source_trajectories(lines)
     with open(os.path.join(RES, "REPORT.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print("\n".join(lines))

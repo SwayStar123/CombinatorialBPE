@@ -31,6 +31,14 @@ from cbpe import CombinatorialBPE, load  # noqa: E402
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 CACHE = os.path.join(ROOT, "data", "cache")
 
+def rel(path):
+    """Project-relative path for logs (absolute if it lives on another drive)."""
+    try:
+        return os.path.relpath(path, ROOT).replace("\\", "/")
+    except ValueError:
+        return os.path.abspath(path).replace("\\", "/")
+
+
 # ---------------------------------------------------------------- tokenise
 def encode_file(tok_path, text_path, max_chars=None):
     """Tokenise in a torch-free subprocess (encode.py) and cache the result as .npy."""
@@ -39,9 +47,12 @@ def encode_file(tok_path, text_path, max_chars=None):
     if not os.path.exists(out):
         subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "encode.py"), tok_path,
                         text_path, out, str(max_chars or 0)], check=True)
-    with open(text_path, encoding="utf-8") as f:
-        text = f.read(max_chars) if max_chars else f.read()
-    return np.load(out), len(text.encode("utf-8"))
+    if max_chars:
+        with open(text_path, encoding="utf-8") as f:
+            n_bytes = len(f.read(max_chars).encode("utf-8"))
+    else:
+        n_bytes = os.path.getsize(text_path)  # our text files are UTF-8 with \n newlines
+    return np.load(out), n_bytes
 
 
 # ------------------------------------------------------------------- model
@@ -167,6 +178,10 @@ def train(tok_path, args):
     print(f"[{args.tag or args.head}] {os.path.basename(tok_path)}: tables {sizes} (sum {sum(sizes)}), train tokens {len(data) / 1e6:.1f}M, "
           f"{bytes_per_tok:.2f} bytes/token", flush=True)
     data, val = torch.from_numpy(data), torch.from_numpy(val)
+    extra = {}  # per-source validation sets, scored at every checkpoint
+    for path in args.extra_val:
+        v, vb = encode_file(tok_path, path)
+        extra[os.path.basename(path)] = (torch.from_numpy(v), vb)
 
     torch.manual_seed(args.seed)
     model = GPT(sizes, args.d, args.layers, args.heads, args.ctx, args.head, args.head_hidden,
@@ -191,8 +206,11 @@ def train(tok_path, args):
         if step % args.eval_every == 0 or step == args.steps:
             bpb, parts = evaluate(model, val, args.ctx, val_bytes)
             seen = step * tokens_per_step
-            log["curve"].append({"step": step, "tokens": seen, "bytes": seen * bytes_per_tok, "val_bpb": bpb,
-                                 "val_bpb_parts": parts})
+            point = {"step": step, "tokens": seen, "bytes": seen * bytes_per_tok, "val_bpb": bpb,
+                     "val_bpb_parts": parts}
+            if extra and step > 0:
+                point["by_source"] = {name: evaluate(model, v, args.ctx, vb)[0] for name, (v, vb) in extra.items()}
+            log["curve"].append(point)
             print(f"  step {step:5d}  val bpb {bpb:.4f}  parts {[round(p, 4) for p in parts]}  "
                   f"({time.time() - t0:.0f}s)", flush=True)
         if step == args.steps:
@@ -210,6 +228,11 @@ def train(tok_path, args):
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
     log["train_s"] = time.time() - t0
+    log["final_by_source"] = {}
+    for name, (v, vb) in extra.items():
+        bpb, parts = evaluate(model, v, args.ctx, vb)
+        log["final_by_source"][name] = {"val_bpb": bpb, "val_bpb_parts": parts}
+        print(f"  {name}: bpb {bpb:.4f}", flush=True)
     return log
 
 
@@ -219,6 +242,7 @@ if __name__ == "__main__":
     ap.add_argument("--train_text", default=os.path.join(ROOT, "data", "wiki_en_lm.txt"))
     ap.add_argument("--val_text", default=os.path.join(ROOT, "data", "wiki_en.test.txt"))
     ap.add_argument("--val_chars", type=int, default=2_000_000)
+    ap.add_argument("--extra_val", nargs="*", default=[], help="extra validation files, scored once at the end")
     ap.add_argument("--steps", type=int, default=2500)
     ap.add_argument("--bs", type=int, default=32)
     ap.add_argument("--accum", type=int, default=1, help="split each batch into this many micro-batches")
@@ -240,8 +264,9 @@ if __name__ == "__main__":
     results = json.load(open(args.out)) if os.path.exists(args.out) else []
     for t in args.tokenizers:
         r = train(t, args)
-        r["args"] = {k: os.path.relpath(v, ROOT).replace("\\", "/") if k in ("train_text", "val_text", "out") else v
-                     for k, v in vars(args).items()}
+        r["args"] = {k: rel(v) if k in ("train_text", "val_text", "out") else v
+                     for k, v in vars(args).items() if k != "extra_val"}
+        r["args"]["extra_val"] = [os.path.basename(v) for v in args.extra_val]
         results = [x for x in results if not (x["tokenizer"] == r["tokenizer"] and x["tag"] == r["tag"]
                                               and x["args"]["seed"] == args.seed)]
         results.append(r)

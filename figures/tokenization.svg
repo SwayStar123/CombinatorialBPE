@@ -1,206 +1,322 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 548" width="1000" height="548" role="img" aria-labelledby="t d">
-<title id="t">Standard BPE vs Combinatorial BPE on the same text</title>
-<desc id="d">Standard BPE needs 21 tokens, Combinatorial BPE 15; Traditional and Simplified Chinese map to identical cores.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 770" width="1000" height="770" role="img" aria-labelledby="t d">
+<title id="t">Standard BPE vs Combinatorial BPE on prose, code and Chinese</title>
+<desc id="d">The same 32k-row budget: an English sentence, a code snippet and Chinese text need far fewer combinatorial tokens; Traditional and Simplified Chinese map to identical cores.</desc>
 <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8c8b85"/></marker></defs>
-<rect width="1000" height="548" rx="14" fill="#ffffff" stroke="#e3e2dc"/>
-<text x="32.0" y="44.0" font-size="20" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Same text, two tokenizers (both with 16,384 embedding rows)</text>
-<text x="32.0" y="70.0" font-size="14" fill="#55544f" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" >In 1969, NASA landed on the Moon (the first crewed landing). &quot;Amazing!&quot; said the President.</text>
-<text x="32.0" y="112.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Standard BPE (GPT-2 style) — 21 tokens</text>
-<rect x="32.0" y="126.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#1f1f1c">I</tspan><tspan x="48.1" fill="#1f1f1c">n</tspan></text>
-<rect x="72.3" y="126.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="79.3" fill="#8c8b85">·</tspan><tspan x="88.5" fill="#1f1f1c">1</tspan><tspan x="97.6" fill="#1f1f1c">9</tspan><tspan x="106.8" fill="#1f1f1c">6</tspan><tspan x="115.9" fill="#1f1f1c">9</tspan></text>
-<rect x="140.1" y="126.0" width="23.1" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="147.1" fill="#1f1f1c">,</tspan></text>
-<rect x="171.2" y="126.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="178.2" fill="#8c8b85">·</tspan><tspan x="187.4" fill="#1f1f1c">N</tspan><tspan x="196.5" fill="#1f1f1c">A</tspan><tspan x="205.7" fill="#1f1f1c">S</tspan><tspan x="214.8" fill="#1f1f1c">A</tspan></text>
-<rect x="239.0" y="126.0" width="78.0" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="246.0" fill="#8c8b85">·</tspan><tspan x="255.1" fill="#1f1f1c">l</tspan><tspan x="264.2" fill="#1f1f1c">a</tspan><tspan x="273.4" fill="#1f1f1c">n</tspan><tspan x="282.5" fill="#1f1f1c">d</tspan><tspan x="291.7" fill="#1f1f1c">e</tspan><tspan x="300.8" fill="#1f1f1c">d</tspan></text>
-<rect x="325.0" y="126.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="332.0" fill="#8c8b85">·</tspan><tspan x="341.1" fill="#1f1f1c">o</tspan><tspan x="350.3" fill="#1f1f1c">n</tspan></text>
-<rect x="374.4" y="126.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="381.4" fill="#8c8b85">·</tspan><tspan x="390.6" fill="#1f1f1c">t</tspan><tspan x="399.7" fill="#1f1f1c">h</tspan><tspan x="408.9" fill="#1f1f1c">e</tspan></text>
-<rect x="433.1" y="126.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="440.1" fill="#8c8b85">·</tspan><tspan x="449.2" fill="#1f1f1c">M</tspan><tspan x="458.3" fill="#1f1f1c">o</tspan><tspan x="467.5" fill="#1f1f1c">o</tspan><tspan x="476.6" fill="#1f1f1c">n</tspan></text>
-<rect x="500.8" y="126.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="507.8" fill="#8c8b85">·</tspan><tspan x="517.0" fill="#1f1f1c">(</tspan></text>
-<rect x="541.1" y="126.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="548.1" fill="#1f1f1c">t</tspan><tspan x="557.2" fill="#1f1f1c">h</tspan><tspan x="566.4" fill="#1f1f1c">e</tspan></text>
-<rect x="590.6" y="126.0" width="68.9" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="597.6" fill="#8c8b85">·</tspan><tspan x="606.7" fill="#1f1f1c">f</tspan><tspan x="615.9" fill="#1f1f1c">i</tspan><tspan x="625.0" fill="#1f1f1c">r</tspan><tspan x="634.1" fill="#1f1f1c">s</tspan><tspan x="643.3" fill="#1f1f1c">t</tspan></text>
-<rect x="667.5" y="126.0" width="78.0" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="674.5" fill="#8c8b85">·</tspan><tspan x="683.6" fill="#1f1f1c">c</tspan><tspan x="692.8" fill="#1f1f1c">r</tspan><tspan x="701.9" fill="#1f1f1c">e</tspan><tspan x="711.0" fill="#1f1f1c">w</tspan><tspan x="720.2" fill="#1f1f1c">e</tspan><tspan x="729.3" fill="#1f1f1c">d</tspan></text>
-<rect x="753.5" y="126.0" width="87.2" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="760.5" fill="#8c8b85">·</tspan><tspan x="769.6" fill="#1f1f1c">l</tspan><tspan x="778.8" fill="#1f1f1c">a</tspan><tspan x="787.9" fill="#1f1f1c">n</tspan><tspan x="797.1" fill="#1f1f1c">d</tspan><tspan x="806.2" fill="#1f1f1c">i</tspan><tspan x="815.4" fill="#1f1f1c">n</tspan><tspan x="824.5" fill="#1f1f1c">g</tspan></text>
-<rect x="848.7" y="126.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="855.7" fill="#1f1f1c">)</tspan><tspan x="864.9" fill="#1f1f1c">.</tspan></text>
-<rect x="889.0" y="126.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="146.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="896.0" fill="#8c8b85">·</tspan><tspan x="905.1" fill="#1f1f1c">&quot;</tspan></text>
-<rect x="32.0" y="174.0" width="78.0" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="194.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#1f1f1c">A</tspan><tspan x="48.1" fill="#1f1f1c">m</tspan><tspan x="57.3" fill="#1f1f1c">a</tspan><tspan x="66.5" fill="#1f1f1c">z</tspan><tspan x="75.6" fill="#1f1f1c">i</tspan><tspan x="84.8" fill="#1f1f1c">n</tspan><tspan x="93.9" fill="#1f1f1c">g</tspan></text>
-<rect x="118.0" y="174.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="194.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="125.0" fill="#1f1f1c">!</tspan><tspan x="134.2" fill="#1f1f1c">&quot;</tspan></text>
-<rect x="158.3" y="174.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="194.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="165.3" fill="#8c8b85">·</tspan><tspan x="174.5" fill="#1f1f1c">s</tspan><tspan x="183.7" fill="#1f1f1c">a</tspan><tspan x="192.8" fill="#1f1f1c">i</tspan><tspan x="202.0" fill="#1f1f1c">d</tspan></text>
-<rect x="226.1" y="174.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="194.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="233.1" fill="#8c8b85">·</tspan><tspan x="242.2" fill="#1f1f1c">t</tspan><tspan x="251.4" fill="#1f1f1c">h</tspan><tspan x="260.6" fill="#1f1f1c">e</tspan></text>
-<rect x="284.7" y="174.0" width="105.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="194.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="291.7" fill="#8c8b85">·</tspan><tspan x="300.8" fill="#1f1f1c">P</tspan><tspan x="310.0" fill="#1f1f1c">r</tspan><tspan x="319.1" fill="#1f1f1c">e</tspan><tspan x="328.3" fill="#1f1f1c">s</tspan><tspan x="337.4" fill="#1f1f1c">i</tspan><tspan x="346.6" fill="#1f1f1c">d</tspan><tspan x="355.7" fill="#1f1f1c">e</tspan><tspan x="364.9" fill="#1f1f1c">n</tspan><tspan x="374.0" fill="#1f1f1c">t</tspan></text>
-<rect x="398.2" y="174.0" width="23.1" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
-<text y="194.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="405.2" fill="#1f1f1c">.</tspan></text>
-<text x="32.0" y="236.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Combinatorial BPE — 15 tokens, each one (variation, prefix, core, suffix)</text>
-<rect x="32.0" y="260.0" width="32.3" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#1f1f1c">i</tspan><tspan x="48.1" fill="#1f1f1c">n</tspan></text>
-<rect x="32.0" y="260.0" width="32.3" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<rect x="42.3" y="249.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="55.3" y="262.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
-<rect x="74.3" y="260.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="81.3" fill="#8c8b85">·</tspan></text>
-<rect x="97.4" y="260.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="104.4" fill="#1f1f1c">1</tspan><tspan x="113.6" fill="#1f1f1c">9</tspan><tspan x="122.8" fill="#1f1f1c">6</tspan><tspan x="131.9" fill="#1f1f1c">9</tspan></text>
-<rect x="148.0" y="260.0" width="23.1" height="30.0" rx="0" fill="#fbe0d3" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="155.0" fill="#1f1f1c">,</tspan></text>
-<rect x="74.3" y="260.0" width="96.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="97.4" y1="261.0" x2="97.4" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<line x1="148.0" y1="261.0" x2="148.0" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="181.2" y="260.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="188.2" fill="#8c8b85">·</tspan></text>
-<rect x="204.3" y="260.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="211.3" fill="#1f1f1c">n</tspan><tspan x="220.5" fill="#1f1f1c">a</tspan><tspan x="229.7" fill="#1f1f1c">s</tspan><tspan x="238.8" fill="#1f1f1c">a</tspan></text>
-<rect x="181.2" y="260.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="204.3" y1="261.0" x2="204.3" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="232.9" y="249.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="245.9" y="262.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >AA</text>
-<rect x="264.9" y="260.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="271.9" fill="#8c8b85">·</tspan></text>
-<rect x="288.1" y="260.0" width="68.9" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="295.1" fill="#1f1f1c">l</tspan><tspan x="304.2" fill="#1f1f1c">a</tspan><tspan x="313.4" fill="#1f1f1c">n</tspan><tspan x="322.5" fill="#1f1f1c">d</tspan><tspan x="331.7" fill="#1f1f1c">e</tspan><tspan x="340.8" fill="#1f1f1c">d</tspan></text>
-<rect x="264.9" y="260.0" width="92.1" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="288.1" y1="261.0" x2="288.1" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="367.0" y="260.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="374.0" fill="#8c8b85">·</tspan></text>
-<rect x="390.1" y="260.0" width="32.3" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="397.1" fill="#1f1f1c">o</tspan><tspan x="406.3" fill="#1f1f1c">n</tspan></text>
-<rect x="367.0" y="260.0" width="55.4" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="390.1" y1="261.0" x2="390.1" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="432.4" y="260.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="439.4" fill="#8c8b85">·</tspan></text>
-<rect x="455.6" y="260.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="462.6" fill="#1f1f1c">t</tspan><tspan x="471.7" fill="#1f1f1c">h</tspan><tspan x="480.9" fill="#1f1f1c">e</tspan></text>
-<rect x="432.4" y="260.0" width="64.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="455.6" y1="261.0" x2="455.6" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="507.0" y="260.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="514.0" fill="#8c8b85">·</tspan></text>
-<rect x="530.2" y="260.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="537.2" fill="#1f1f1c">m</tspan><tspan x="546.3" fill="#1f1f1c">o</tspan><tspan x="555.5" fill="#1f1f1c">o</tspan><tspan x="564.6" fill="#1f1f1c">n</tspan></text>
-<rect x="507.0" y="260.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="530.2" y1="261.0" x2="530.2" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="558.8" y="249.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="571.8" y="262.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
-<rect x="590.8" y="260.0" width="32.3" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="597.8" fill="#8c8b85">·</tspan><tspan x="606.9" fill="#1f1f1c">(</tspan></text>
-<rect x="623.1" y="260.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="630.1" fill="#1f1f1c">t</tspan><tspan x="639.2" fill="#1f1f1c">h</tspan><tspan x="648.4" fill="#1f1f1c">e</tspan></text>
-<rect x="590.8" y="260.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="623.1" y1="261.0" x2="623.1" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="674.5" y="260.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="681.5" fill="#8c8b85">·</tspan></text>
-<rect x="697.7" y="260.0" width="59.8" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="704.7" fill="#1f1f1c">f</tspan><tspan x="713.8" fill="#1f1f1c">i</tspan><tspan x="723.0" fill="#1f1f1c">r</tspan><tspan x="732.1" fill="#1f1f1c">s</tspan><tspan x="741.3" fill="#1f1f1c">t</tspan></text>
-<rect x="674.5" y="260.0" width="82.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="697.7" y1="261.0" x2="697.7" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="767.4" y="260.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="774.4" fill="#8c8b85">·</tspan></text>
-<rect x="790.6" y="260.0" width="68.9" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="280.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="797.6" fill="#1f1f1c">c</tspan><tspan x="806.7" fill="#1f1f1c">r</tspan><tspan x="815.9" fill="#1f1f1c">e</tspan><tspan x="825.0" fill="#1f1f1c">w</tspan><tspan x="834.2" fill="#1f1f1c">e</tspan><tspan x="843.3" fill="#1f1f1c">d</tspan></text>
-<rect x="767.4" y="260.0" width="92.1" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="790.6" y1="261.0" x2="790.6" y2="289.0" stroke="#ffffff" stroke-width="2" />
-<rect x="32.0" y="312.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#8c8b85">·</tspan></text>
-<rect x="55.1" y="312.0" width="78.0" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="62.1" fill="#1f1f1c">l</tspan><tspan x="71.3" fill="#1f1f1c">a</tspan><tspan x="80.5" fill="#1f1f1c">n</tspan><tspan x="89.6" fill="#1f1f1c">d</tspan><tspan x="98.8" fill="#1f1f1c">i</tspan><tspan x="107.9" fill="#1f1f1c">n</tspan><tspan x="117.1" fill="#1f1f1c">g</tspan></text>
-<rect x="133.2" y="312.0" width="32.3" height="30.0" rx="0" fill="#fbe0d3" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="140.2" fill="#1f1f1c">)</tspan><tspan x="149.3" fill="#1f1f1c">.</tspan></text>
-<rect x="32.0" y="312.0" width="133.5" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="55.1" y1="313.0" x2="55.1" y2="341.0" stroke="#ffffff" stroke-width="2" />
-<line x1="133.2" y1="313.0" x2="133.2" y2="341.0" stroke="#ffffff" stroke-width="2" />
-<rect x="175.5" y="312.0" width="32.3" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="182.5" fill="#8c8b85">·</tspan><tspan x="191.7" fill="#1f1f1c">&quot;</tspan></text>
-<rect x="207.8" y="312.0" width="78.0" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="214.8" fill="#1f1f1c">a</tspan><tspan x="224.0" fill="#1f1f1c">m</tspan><tspan x="233.1" fill="#1f1f1c">a</tspan><tspan x="242.3" fill="#1f1f1c">z</tspan><tspan x="251.4" fill="#1f1f1c">i</tspan><tspan x="260.6" fill="#1f1f1c">n</tspan><tspan x="269.7" fill="#1f1f1c">g</tspan></text>
-<rect x="285.9" y="312.0" width="32.3" height="30.0" rx="0" fill="#fbe0d3" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="292.9" fill="#1f1f1c">!</tspan><tspan x="302.0" fill="#1f1f1c">&quot;</tspan></text>
-<rect x="175.5" y="312.0" width="142.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="207.8" y1="313.0" x2="207.8" y2="341.0" stroke="#ffffff" stroke-width="2" />
-<line x1="285.9" y1="313.0" x2="285.9" y2="341.0" stroke="#ffffff" stroke-width="2" />
-<rect x="296.1" y="301.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="309.1" y="314.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
-<rect x="328.1" y="312.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="335.1" fill="#8c8b85">·</tspan></text>
-<rect x="351.3" y="312.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="358.3" fill="#1f1f1c">s</tspan><tspan x="367.4" fill="#1f1f1c">a</tspan><tspan x="376.6" fill="#1f1f1c">i</tspan><tspan x="385.7" fill="#1f1f1c">d</tspan></text>
-<rect x="328.1" y="312.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="351.3" y1="313.0" x2="351.3" y2="341.0" stroke="#ffffff" stroke-width="2" />
-<rect x="411.9" y="312.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="418.9" fill="#8c8b85">·</tspan></text>
-<rect x="435.0" y="312.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="442.0" fill="#1f1f1c">t</tspan><tspan x="451.2" fill="#1f1f1c">h</tspan><tspan x="460.3" fill="#1f1f1c">e</tspan></text>
-<rect x="411.9" y="312.0" width="64.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="435.0" y1="313.0" x2="435.0" y2="341.0" stroke="#ffffff" stroke-width="2" />
-<rect x="486.5" y="312.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="493.5" fill="#8c8b85">·</tspan></text>
-<rect x="509.6" y="312.0" width="96.4" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="516.6" fill="#1f1f1c">p</tspan><tspan x="525.8" fill="#1f1f1c">r</tspan><tspan x="534.9" fill="#1f1f1c">e</tspan><tspan x="544.1" fill="#1f1f1c">s</tspan><tspan x="553.2" fill="#1f1f1c">i</tspan><tspan x="562.4" fill="#1f1f1c">d</tspan><tspan x="571.5" fill="#1f1f1c">e</tspan><tspan x="580.7" fill="#1f1f1c">n</tspan><tspan x="589.8" fill="#1f1f1c">t</tspan></text>
-<rect x="606.0" y="312.0" width="23.1" height="30.0" rx="0" fill="#fbe0d3" />
-<text y="332.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="613.0" fill="#1f1f1c">.</tspan></text>
-<rect x="486.5" y="312.0" width="142.7" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="509.6" y1="313.0" x2="509.6" y2="341.0" stroke="#ffffff" stroke-width="2" />
-<line x1="606.0" y1="313.0" x2="606.0" y2="341.0" stroke="#ffffff" stroke-width="2" />
-<rect x="607.1" y="301.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="620.1" y="314.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
-<text x="32.0" y="382.0" font-size="15" fill="#1f1f1c" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Chinese: Traditional and Simplified spellings share the same cores</text>
-<text x="32.0" y="426.0" font-size="16" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >臺灣位於東亞。</text>
-<rect x="190.0" y="410.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="430.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="197.0" fill="#1f1f1c">台</tspan><tspan x="212.3" fill="#1f1f1c">湾</tspan></text>
-<rect x="190.0" y="410.0" width="44.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<rect x="216.6" y="399.0" width="22.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="227.6" y="412.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >繁</text>
-<rect x="244.6" y="410.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="430.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="251.6" fill="#1f1f1c">位</tspan><tspan x="266.9" fill="#1f1f1c">于</tspan></text>
-<rect x="244.6" y="410.0" width="44.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<rect x="271.2" y="399.0" width="22.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="282.2" y="412.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >繁</text>
-<rect x="299.2" y="410.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="430.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="306.2" fill="#1f1f1c">东</tspan><tspan x="321.5" fill="#1f1f1c">亚</tspan></text>
-<rect x="343.8" y="410.0" width="29.3" height="30.0" rx="0" fill="#fbe0d3" />
-<text y="430.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="350.8" fill="#1f1f1c">。</tspan></text>
-<rect x="299.2" y="410.0" width="73.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="343.8" y1="411.0" x2="343.8" y2="439.0" stroke="#ffffff" stroke-width="2" />
-<rect x="355.1" y="399.0" width="22.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="366.1" y="412.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >繁</text>
-<text x="32.0" y="470.0" font-size="16" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >台湾位于东亚。</text>
-<rect x="190.0" y="454.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="474.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="197.0" fill="#1f1f1c">台</tspan><tspan x="212.3" fill="#1f1f1c">湾</tspan></text>
-<rect x="190.0" y="454.0" width="44.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<rect x="244.6" y="454.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="474.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="251.6" fill="#1f1f1c">位</tspan><tspan x="266.9" fill="#1f1f1c">于</tspan></text>
-<rect x="244.6" y="454.0" width="44.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<rect x="299.2" y="454.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
-<text y="474.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="306.2" fill="#1f1f1c">东</tspan><tspan x="321.5" fill="#1f1f1c">亚</tspan></text>
-<rect x="343.8" y="454.0" width="29.3" height="30.0" rx="0" fill="#fbe0d3" />
-<text y="474.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="350.8" fill="#1f1f1c">。</tspan></text>
-<rect x="299.2" y="454.0" width="73.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
-<line x1="343.8" y1="455.0" x2="343.8" y2="483.0" stroke="#ffffff" stroke-width="2" />
-<rect x="32.0" y="493.0" width="14.0" height="14.0" rx="3" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
-<text x="52.0" y="504.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >prefix</text>
-<rect x="102.6" y="493.0" width="14.0" height="14.0" rx="3" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
-<text x="122.6" y="504.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >core</text>
-<rect x="159.0" y="493.0" width="14.0" height="14.0" rx="3" fill="#fbe0d3" stroke="#d4561f" stroke-width="1" />
-<text x="179.0" y="504.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >suffix</text>
-<rect x="229.6" y="493.0" width="14.0" height="14.0" rx="3" fill="#efeee9" stroke="#8c8b85" stroke-width="1" />
-<text x="249.6" y="504.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >standard token</text>
-<rect x="357.0" y="492.0" width="24.0" height="16.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
-<text x="369.0" y="505.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
-<text x="389.0" y="504.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >variation: Aa = Capitalised, AA = UPPER, 繁 = Traditional, none = as-is</text>
-<text x="32.0" y="528.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >· marks a space. Cores are stored case-folded (and in Simplified for Chinese); the variation restores the surface form.</text>
+<rect width="1000" height="770" rx="14" fill="#ffffff" stroke="#e3e2dc"/>
+<text x="32.0" y="44.0" font-size="20" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >One tokenizer for prose, code and Chinese (both with 32,768 embedding rows)</text>
+<text x="32.0" y="90.0" font-size="16" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >English</text>
+<text x="32.0" y="112.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" xml:space="preserve">In 1969, NASA landed on the Moon (the first crewed landing). &quot;Amazing!&quot; said the President.</text>
+<text x="32.0" y="144.0" font-size="14" fill="#55544f" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Standard BPE — 27 tokens</text>
+<rect x="32.0" y="156.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#1f1f1c">I</tspan><tspan x="48.1" fill="#1f1f1c">n</tspan></text>
+<rect x="70.3" y="156.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="77.3" fill="#8c8b85">·</tspan><tspan x="86.5" fill="#1f1f1c">1</tspan><tspan x="95.6" fill="#1f1f1c">9</tspan><tspan x="104.8" fill="#1f1f1c">6</tspan><tspan x="113.9" fill="#1f1f1c">9</tspan></text>
+<rect x="136.1" y="156.0" width="23.1" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="143.1" fill="#1f1f1c">,</tspan></text>
+<rect x="165.2" y="156.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="172.2" fill="#8c8b85">·</tspan><tspan x="181.4" fill="#1f1f1c">N</tspan><tspan x="190.5" fill="#1f1f1c">A</tspan><tspan x="199.7" fill="#1f1f1c">S</tspan><tspan x="208.8" fill="#1f1f1c">A</tspan></text>
+<rect x="231.0" y="156.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="238.0" fill="#8c8b85">·</tspan><tspan x="247.1" fill="#1f1f1c">l</tspan><tspan x="256.2" fill="#1f1f1c">a</tspan><tspan x="265.4" fill="#1f1f1c">n</tspan><tspan x="274.5" fill="#1f1f1c">d</tspan></text>
+<rect x="296.7" y="156.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="303.7" fill="#1f1f1c">e</tspan><tspan x="312.9" fill="#1f1f1c">d</tspan></text>
+<rect x="335.0" y="156.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="342.0" fill="#8c8b85">·</tspan><tspan x="351.2" fill="#1f1f1c">o</tspan><tspan x="360.3" fill="#1f1f1c">n</tspan></text>
+<rect x="382.5" y="156.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="389.5" fill="#8c8b85">·</tspan><tspan x="398.6" fill="#1f1f1c">t</tspan><tspan x="407.8" fill="#1f1f1c">h</tspan><tspan x="416.9" fill="#1f1f1c">e</tspan></text>
+<rect x="439.1" y="156.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="446.1" fill="#8c8b85">·</tspan><tspan x="455.2" fill="#1f1f1c">M</tspan><tspan x="464.4" fill="#1f1f1c">o</tspan><tspan x="473.5" fill="#1f1f1c">o</tspan><tspan x="482.6" fill="#1f1f1c">n</tspan></text>
+<rect x="504.8" y="156.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="511.8" fill="#8c8b85">·</tspan><tspan x="521.0" fill="#1f1f1c">(</tspan></text>
+<rect x="543.1" y="156.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="550.1" fill="#1f1f1c">t</tspan><tspan x="559.2" fill="#1f1f1c">h</tspan><tspan x="568.4" fill="#1f1f1c">e</tspan></text>
+<rect x="590.6" y="156.0" width="68.9" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="597.6" fill="#8c8b85">·</tspan><tspan x="606.7" fill="#1f1f1c">f</tspan><tspan x="615.9" fill="#1f1f1c">i</tspan><tspan x="625.0" fill="#1f1f1c">r</tspan><tspan x="634.1" fill="#1f1f1c">s</tspan><tspan x="643.3" fill="#1f1f1c">t</tspan></text>
+<rect x="665.5" y="156.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="672.5" fill="#8c8b85">·</tspan><tspan x="681.6" fill="#1f1f1c">c</tspan><tspan x="690.8" fill="#1f1f1c">r</tspan><tspan x="699.9" fill="#1f1f1c">e</tspan><tspan x="709.0" fill="#1f1f1c">w</tspan></text>
+<rect x="731.2" y="156.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="738.2" fill="#1f1f1c">e</tspan><tspan x="747.4" fill="#1f1f1c">d</tspan></text>
+<rect x="769.5" y="156.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="776.5" fill="#8c8b85">·</tspan><tspan x="785.6" fill="#1f1f1c">l</tspan><tspan x="794.8" fill="#1f1f1c">a</tspan><tspan x="803.9" fill="#1f1f1c">n</tspan><tspan x="813.1" fill="#1f1f1c">d</tspan></text>
+<rect x="835.2" y="156.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="842.2" fill="#1f1f1c">i</tspan><tspan x="851.4" fill="#1f1f1c">n</tspan><tspan x="860.5" fill="#1f1f1c">g</tspan></text>
+<rect x="882.7" y="156.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="889.7" fill="#1f1f1c">)</tspan><tspan x="898.9" fill="#1f1f1c">.</tspan></text>
+<rect x="921.0" y="156.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="176.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="928.0" fill="#8c8b85">·</tspan><tspan x="937.1" fill="#1f1f1c">&quot;</tspan></text>
+<rect x="32.0" y="196.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#1f1f1c">A</tspan><tspan x="48.1" fill="#1f1f1c">m</tspan></text>
+<rect x="70.3" y="196.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="77.3" fill="#1f1f1c">a</tspan><tspan x="86.5" fill="#1f1f1c">z</tspan></text>
+<rect x="108.6" y="196.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="115.6" fill="#1f1f1c">i</tspan><tspan x="124.8" fill="#1f1f1c">n</tspan><tspan x="133.9" fill="#1f1f1c">g</tspan></text>
+<rect x="156.1" y="196.0" width="23.1" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="163.1" fill="#1f1f1c">!</tspan></text>
+<rect x="185.2" y="196.0" width="23.1" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="192.2" fill="#1f1f1c">&quot;</tspan></text>
+<rect x="214.4" y="196.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="221.4" fill="#8c8b85">·</tspan><tspan x="230.5" fill="#1f1f1c">s</tspan><tspan x="239.7" fill="#1f1f1c">a</tspan><tspan x="248.8" fill="#1f1f1c">i</tspan><tspan x="258.0" fill="#1f1f1c">d</tspan></text>
+<rect x="280.1" y="196.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="287.1" fill="#8c8b85">·</tspan><tspan x="296.2" fill="#1f1f1c">t</tspan><tspan x="305.4" fill="#1f1f1c">h</tspan><tspan x="314.5" fill="#1f1f1c">e</tspan></text>
+<rect x="336.7" y="196.0" width="105.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="343.7" fill="#8c8b85">·</tspan><tspan x="352.9" fill="#1f1f1c">P</tspan><tspan x="362.0" fill="#1f1f1c">r</tspan><tspan x="371.1" fill="#1f1f1c">e</tspan><tspan x="380.3" fill="#1f1f1c">s</tspan><tspan x="389.4" fill="#1f1f1c">i</tspan><tspan x="398.6" fill="#1f1f1c">d</tspan><tspan x="407.7" fill="#1f1f1c">e</tspan><tspan x="416.9" fill="#1f1f1c">n</tspan><tspan x="426.0" fill="#1f1f1c">t</tspan></text>
+<rect x="448.2" y="196.0" width="23.1" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="216.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="455.2" fill="#1f1f1c">.</tspan></text>
+<text x="32.0" y="244.0" font-size="14" fill="#138a60" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Combinatorial BPE — 18 tokens</text>
+<rect x="32.0" y="266.0" width="32.3" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#1f1f1c">i</tspan><tspan x="48.1" fill="#1f1f1c">n</tspan></text>
+<rect x="32.0" y="266.0" width="32.3" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="42.3" y="255.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="55.3" y="268.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
+<rect x="74.3" y="266.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="81.3" fill="#8c8b85">·</tspan></text>
+<rect x="97.4" y="266.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="104.4" fill="#1f1f1c">1</tspan><tspan x="113.6" fill="#1f1f1c">9</tspan><tspan x="122.8" fill="#1f1f1c">6</tspan><tspan x="131.9" fill="#1f1f1c">9</tspan></text>
+<rect x="148.0" y="266.0" width="23.1" height="30.0" rx="0" fill="#fbe0d3" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="155.0" fill="#1f1f1c">,</tspan></text>
+<rect x="74.3" y="266.0" width="96.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="97.4" y1="267.0" x2="97.4" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<line x1="148.0" y1="267.0" x2="148.0" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="181.2" y="266.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="188.2" fill="#8c8b85">·</tspan></text>
+<rect x="204.3" y="266.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="211.3" fill="#1f1f1c">n</tspan><tspan x="220.5" fill="#1f1f1c">a</tspan><tspan x="229.7" fill="#1f1f1c">s</tspan><tspan x="238.8" fill="#1f1f1c">a</tspan></text>
+<rect x="181.2" y="266.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="204.3" y1="267.0" x2="204.3" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="232.9" y="255.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="245.9" y="268.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >AA</text>
+<rect x="264.9" y="266.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="271.9" fill="#8c8b85">·</tspan></text>
+<rect x="288.1" y="266.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="295.1" fill="#1f1f1c">l</tspan><tspan x="304.2" fill="#1f1f1c">a</tspan><tspan x="313.4" fill="#1f1f1c">n</tspan></text>
+<rect x="264.9" y="266.0" width="64.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="288.1" y1="267.0" x2="288.1" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="339.5" y="266.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="346.5" fill="#1f1f1c">d</tspan><tspan x="355.7" fill="#1f1f1c">e</tspan><tspan x="364.8" fill="#1f1f1c">d</tspan></text>
+<rect x="339.5" y="266.0" width="41.5" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="391.0" y="266.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="398.0" fill="#8c8b85">·</tspan></text>
+<rect x="414.1" y="266.0" width="32.3" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="421.1" fill="#1f1f1c">o</tspan><tspan x="430.3" fill="#1f1f1c">n</tspan></text>
+<rect x="391.0" y="266.0" width="55.4" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="414.1" y1="267.0" x2="414.1" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="456.4" y="266.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="463.4" fill="#8c8b85">·</tspan></text>
+<rect x="479.6" y="266.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="486.6" fill="#1f1f1c">t</tspan><tspan x="495.7" fill="#1f1f1c">h</tspan><tspan x="504.9" fill="#1f1f1c">e</tspan></text>
+<rect x="456.4" y="266.0" width="64.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="479.6" y1="267.0" x2="479.6" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="531.0" y="266.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="538.0" fill="#8c8b85">·</tspan></text>
+<rect x="554.2" y="266.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="561.2" fill="#1f1f1c">m</tspan><tspan x="570.3" fill="#1f1f1c">o</tspan><tspan x="579.5" fill="#1f1f1c">o</tspan><tspan x="588.6" fill="#1f1f1c">n</tspan></text>
+<rect x="531.0" y="266.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="554.2" y1="267.0" x2="554.2" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="582.8" y="255.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="595.8" y="268.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
+<rect x="614.8" y="266.0" width="32.3" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="621.8" fill="#8c8b85">·</tspan><tspan x="630.9" fill="#1f1f1c">(</tspan></text>
+<rect x="647.1" y="266.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="654.1" fill="#1f1f1c">t</tspan><tspan x="663.2" fill="#1f1f1c">h</tspan><tspan x="672.4" fill="#1f1f1c">e</tspan></text>
+<rect x="614.8" y="266.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="647.1" y1="267.0" x2="647.1" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="698.5" y="266.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="705.5" fill="#8c8b85">·</tspan></text>
+<rect x="721.7" y="266.0" width="59.8" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="728.7" fill="#1f1f1c">f</tspan><tspan x="737.8" fill="#1f1f1c">i</tspan><tspan x="747.0" fill="#1f1f1c">r</tspan><tspan x="756.1" fill="#1f1f1c">s</tspan><tspan x="765.3" fill="#1f1f1c">t</tspan></text>
+<rect x="698.5" y="266.0" width="82.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="721.7" y1="267.0" x2="721.7" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="791.4" y="266.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="798.4" fill="#8c8b85">·</tspan></text>
+<rect x="814.6" y="266.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="821.6" fill="#1f1f1c">c</tspan><tspan x="830.7" fill="#1f1f1c">r</tspan><tspan x="839.9" fill="#1f1f1c">e</tspan><tspan x="849.0" fill="#1f1f1c">w</tspan></text>
+<rect x="791.4" y="266.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="814.6" y1="267.0" x2="814.6" y2="295.0" stroke="#ffffff" stroke-width="2" />
+<rect x="875.2" y="266.0" width="32.3" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="286.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="882.2" fill="#1f1f1c">e</tspan><tspan x="891.3" fill="#1f1f1c">d</tspan></text>
+<rect x="875.2" y="266.0" width="32.3" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="32.0" y="314.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#8c8b85">·</tspan></text>
+<rect x="55.1" y="314.0" width="78.0" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="62.1" fill="#1f1f1c">l</tspan><tspan x="71.3" fill="#1f1f1c">a</tspan><tspan x="80.5" fill="#1f1f1c">n</tspan><tspan x="89.6" fill="#1f1f1c">d</tspan><tspan x="98.8" fill="#1f1f1c">i</tspan><tspan x="107.9" fill="#1f1f1c">n</tspan><tspan x="117.1" fill="#1f1f1c">g</tspan></text>
+<rect x="133.2" y="314.0" width="32.3" height="30.0" rx="0" fill="#fbe0d3" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="140.2" fill="#1f1f1c">)</tspan><tspan x="149.3" fill="#1f1f1c">.</tspan></text>
+<rect x="32.0" y="314.0" width="133.5" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="55.1" y1="315.0" x2="55.1" y2="343.0" stroke="#ffffff" stroke-width="2" />
+<line x1="133.2" y1="315.0" x2="133.2" y2="343.0" stroke="#ffffff" stroke-width="2" />
+<rect x="175.5" y="314.0" width="32.3" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="182.5" fill="#8c8b85">·</tspan><tspan x="191.7" fill="#1f1f1c">&quot;</tspan></text>
+<rect x="207.8" y="314.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="214.8" fill="#1f1f1c">a</tspan><tspan x="224.0" fill="#1f1f1c">m</tspan><tspan x="233.1" fill="#1f1f1c">a</tspan></text>
+<rect x="175.5" y="314.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="207.8" y1="315.0" x2="207.8" y2="343.0" stroke="#ffffff" stroke-width="2" />
+<rect x="227.2" y="303.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="240.2" y="316.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
+<rect x="259.2" y="314.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="266.2" fill="#1f1f1c">z</tspan><tspan x="275.4" fill="#1f1f1c">i</tspan><tspan x="284.5" fill="#1f1f1c">n</tspan><tspan x="293.7" fill="#1f1f1c">g</tspan></text>
+<rect x="309.9" y="314.0" width="32.3" height="30.0" rx="0" fill="#fbe0d3" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="316.9" fill="#1f1f1c">!</tspan><tspan x="326.0" fill="#1f1f1c">&quot;</tspan></text>
+<rect x="259.2" y="314.0" width="82.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="309.9" y1="315.0" x2="309.9" y2="343.0" stroke="#ffffff" stroke-width="2" />
+<rect x="352.1" y="314.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="359.1" fill="#8c8b85">·</tspan></text>
+<rect x="375.3" y="314.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="382.3" fill="#1f1f1c">s</tspan><tspan x="391.4" fill="#1f1f1c">a</tspan><tspan x="400.6" fill="#1f1f1c">i</tspan><tspan x="409.7" fill="#1f1f1c">d</tspan></text>
+<rect x="352.1" y="314.0" width="73.8" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="375.3" y1="315.0" x2="375.3" y2="343.0" stroke="#ffffff" stroke-width="2" />
+<rect x="435.9" y="314.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="442.9" fill="#8c8b85">·</tspan></text>
+<rect x="459.0" y="314.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="466.0" fill="#1f1f1c">t</tspan><tspan x="475.2" fill="#1f1f1c">h</tspan><tspan x="484.3" fill="#1f1f1c">e</tspan></text>
+<rect x="435.9" y="314.0" width="64.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="459.0" y1="315.0" x2="459.0" y2="343.0" stroke="#ffffff" stroke-width="2" />
+<rect x="510.5" y="314.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="517.5" fill="#8c8b85">·</tspan></text>
+<rect x="533.6" y="314.0" width="96.4" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="540.6" fill="#1f1f1c">p</tspan><tspan x="549.8" fill="#1f1f1c">r</tspan><tspan x="558.9" fill="#1f1f1c">e</tspan><tspan x="568.1" fill="#1f1f1c">s</tspan><tspan x="577.2" fill="#1f1f1c">i</tspan><tspan x="586.4" fill="#1f1f1c">d</tspan><tspan x="595.5" fill="#1f1f1c">e</tspan><tspan x="604.7" fill="#1f1f1c">n</tspan><tspan x="613.8" fill="#1f1f1c">t</tspan></text>
+<rect x="630.0" y="314.0" width="23.1" height="30.0" rx="0" fill="#fbe0d3" />
+<text y="334.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="637.0" fill="#1f1f1c">.</tspan></text>
+<rect x="510.5" y="314.0" width="142.7" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="533.6" y1="315.0" x2="533.6" y2="343.0" stroke="#ffffff" stroke-width="2" />
+<line x1="630.0" y1="315.0" x2="630.0" y2="343.0" stroke="#ffffff" stroke-width="2" />
+<rect x="631.1" y="303.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="644.1" y="316.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
+<text x="32.0" y="392.0" font-size="16" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Code</text>
+<text x="32.0" y="414.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" xml:space="preserve">    if (userName != null) { ↵         return getUserName(); ↵     }</text>
+<text x="32.0" y="446.0" font-size="14" fill="#55544f" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Standard BPE — 17 tokens</text>
+<rect x="32.0" y="458.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#8c8b85">·</tspan><tspan x="48.1" fill="#8c8b85">·</tspan><tspan x="57.3" fill="#8c8b85">·</tspan></text>
+<rect x="79.5" y="458.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="86.5" fill="#8c8b85">·</tspan><tspan x="95.6" fill="#1f1f1c">i</tspan><tspan x="104.8" fill="#1f1f1c">f</tspan></text>
+<rect x="126.9" y="458.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="133.9" fill="#8c8b85">·</tspan><tspan x="143.1" fill="#1f1f1c">(</tspan></text>
+<rect x="165.2" y="458.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="172.2" fill="#1f1f1c">u</tspan><tspan x="181.3" fill="#1f1f1c">s</tspan><tspan x="190.5" fill="#1f1f1c">e</tspan><tspan x="199.7" fill="#1f1f1c">r</tspan></text>
+<rect x="221.8" y="458.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="228.8" fill="#1f1f1c">N</tspan><tspan x="237.9" fill="#1f1f1c">a</tspan><tspan x="247.1" fill="#1f1f1c">m</tspan><tspan x="256.2" fill="#1f1f1c">e</tspan></text>
+<rect x="278.4" y="458.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="285.4" fill="#8c8b85">·</tspan><tspan x="294.5" fill="#1f1f1c">!</tspan><tspan x="303.7" fill="#1f1f1c">=</tspan></text>
+<rect x="325.8" y="458.0" width="59.8" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="332.8" fill="#8c8b85">·</tspan><tspan x="342.0" fill="#1f1f1c">n</tspan><tspan x="351.1" fill="#1f1f1c">u</tspan><tspan x="360.3" fill="#1f1f1c">l</tspan><tspan x="369.4" fill="#1f1f1c">l</tspan></text>
+<rect x="391.6" y="458.0" width="23.1" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="398.6" fill="#1f1f1c">)</tspan></text>
+<rect x="420.7" y="458.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="427.7" fill="#8c8b85">·</tspan><tspan x="436.9" fill="#1f1f1c">{</tspan></text>
+<rect x="459.0" y="458.0" width="87.2" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="466.0" fill="#8c8b85">↵</tspan><tspan x="475.2" fill="#8c8b85">·</tspan><tspan x="484.3" fill="#8c8b85">·</tspan><tspan x="493.5" fill="#8c8b85">·</tspan><tspan x="502.6" fill="#8c8b85">·</tspan><tspan x="511.8" fill="#8c8b85">·</tspan><tspan x="520.9" fill="#8c8b85">·</tspan><tspan x="530.1" fill="#8c8b85">·</tspan></text>
+<rect x="552.2" y="458.0" width="78.0" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="559.2" fill="#8c8b85">·</tspan><tspan x="568.4" fill="#1f1f1c">r</tspan><tspan x="577.5" fill="#1f1f1c">e</tspan><tspan x="586.7" fill="#1f1f1c">t</tspan><tspan x="595.8" fill="#1f1f1c">u</tspan><tspan x="605.0" fill="#1f1f1c">r</tspan><tspan x="614.1" fill="#1f1f1c">n</tspan></text>
+<rect x="636.3" y="458.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="643.3" fill="#8c8b85">·</tspan><tspan x="652.4" fill="#1f1f1c">g</tspan><tspan x="661.6" fill="#1f1f1c">e</tspan><tspan x="670.7" fill="#1f1f1c">t</tspan></text>
+<rect x="692.9" y="458.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="699.9" fill="#1f1f1c">U</tspan><tspan x="709.0" fill="#1f1f1c">s</tspan><tspan x="718.2" fill="#1f1f1c">e</tspan><tspan x="727.3" fill="#1f1f1c">r</tspan></text>
+<rect x="749.5" y="458.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="756.5" fill="#1f1f1c">N</tspan><tspan x="765.6" fill="#1f1f1c">a</tspan><tspan x="774.8" fill="#1f1f1c">m</tspan><tspan x="783.9" fill="#1f1f1c">e</tspan></text>
+<rect x="806.1" y="458.0" width="41.5" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="813.1" fill="#1f1f1c">(</tspan><tspan x="822.2" fill="#1f1f1c">)</tspan><tspan x="831.4" fill="#1f1f1c">;</tspan></text>
+<rect x="853.6" y="458.0" width="50.6" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="860.6" fill="#8c8b85">↵</tspan><tspan x="869.7" fill="#8c8b85">·</tspan><tspan x="878.9" fill="#8c8b85">·</tspan><tspan x="888.0" fill="#8c8b85">·</tspan></text>
+<rect x="910.2" y="458.0" width="32.3" height="30.0" rx="6" fill="#efeee9" stroke="#8c8b85" stroke-width="1.2" />
+<text y="478.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="917.2" fill="#8c8b85">·</tspan><tspan x="926.3" fill="#1f1f1c">}</tspan></text>
+<text x="32.0" y="506.0" font-size="14" fill="#138a60" text-anchor="start" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Combinatorial BPE — 9 tokens</text>
+<rect x="32.0" y="528.0" width="50.6" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="39.0" fill="#8c8b85">·</tspan><tspan x="48.1" fill="#8c8b85">·</tspan><tspan x="57.3" fill="#8c8b85">·</tspan><tspan x="66.5" fill="#8c8b85">·</tspan></text>
+<rect x="82.6" y="528.0" width="32.3" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="89.6" fill="#1f1f1c">i</tspan><tspan x="98.8" fill="#1f1f1c">f</tspan></text>
+<rect x="32.0" y="528.0" width="82.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="82.6" y1="529.0" x2="82.6" y2="557.0" stroke="#ffffff" stroke-width="2" />
+<rect x="124.9" y="528.0" width="32.3" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="131.9" fill="#8c8b85">·</tspan><tspan x="141.1" fill="#1f1f1c">(</tspan></text>
+<rect x="157.2" y="528.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="164.2" fill="#1f1f1c">u</tspan><tspan x="173.3" fill="#1f1f1c">s</tspan><tspan x="182.5" fill="#1f1f1c">e</tspan><tspan x="191.7" fill="#1f1f1c">r</tspan></text>
+<rect x="124.9" y="528.0" width="82.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="157.2" y1="529.0" x2="157.2" y2="557.0" stroke="#ffffff" stroke-width="2" />
+<rect x="217.8" y="528.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="224.8" fill="#1f1f1c">n</tspan><tspan x="234.0" fill="#1f1f1c">a</tspan><tspan x="243.1" fill="#1f1f1c">m</tspan><tspan x="252.3" fill="#1f1f1c">e</tspan></text>
+<rect x="217.8" y="528.0" width="50.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="246.4" y="517.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="259.4" y="530.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
+<rect x="278.4" y="528.0" width="50.6" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="285.4" fill="#8c8b85">·</tspan><tspan x="294.6" fill="#1f1f1c">!</tspan><tspan x="303.7" fill="#1f1f1c">=</tspan><tspan x="312.8" fill="#8c8b85">·</tspan></text>
+<rect x="329.0" y="528.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="336.0" fill="#1f1f1c">n</tspan><tspan x="345.2" fill="#1f1f1c">u</tspan><tspan x="354.3" fill="#1f1f1c">l</tspan><tspan x="363.4" fill="#1f1f1c">l</tspan></text>
+<rect x="379.6" y="528.0" width="23.1" height="30.0" rx="0" fill="#fbe0d3" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="386.6" fill="#1f1f1c">)</tspan></text>
+<rect x="278.4" y="528.0" width="124.3" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="329.0" y1="529.0" x2="329.0" y2="557.0" stroke="#ffffff" stroke-width="2" />
+<line x1="379.6" y1="529.0" x2="379.6" y2="557.0" stroke="#ffffff" stroke-width="2" />
+<rect x="412.8" y="528.0" width="114.7" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="419.8" fill="#8c8b85">·</tspan><tspan x="428.9" fill="#1f1f1c">{</tspan><tspan x="438.0" fill="#8c8b85">↵</tspan><tspan x="447.2" fill="#8c8b85">·</tspan><tspan x="456.3" fill="#8c8b85">·</tspan><tspan x="465.5" fill="#8c8b85">·</tspan><tspan x="474.6" fill="#8c8b85">·</tspan><tspan x="483.8" fill="#8c8b85">·</tspan><tspan x="492.9" fill="#8c8b85">·</tspan><tspan x="502.1" fill="#8c8b85">·</tspan><tspan x="511.2" fill="#8c8b85">·</tspan></text>
+<rect x="527.4" y="528.0" width="68.9" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="534.4" fill="#1f1f1c">r</tspan><tspan x="543.5" fill="#1f1f1c">e</tspan><tspan x="552.7" fill="#1f1f1c">t</tspan><tspan x="561.8" fill="#1f1f1c">u</tspan><tspan x="571.0" fill="#1f1f1c">r</tspan><tspan x="580.1" fill="#1f1f1c">n</tspan></text>
+<rect x="412.8" y="528.0" width="183.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="527.4" y1="529.0" x2="527.4" y2="557.0" stroke="#ffffff" stroke-width="2" />
+<rect x="606.3" y="528.0" width="23.1" height="30.0" rx="0" fill="#dbe9fb" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="613.3" fill="#8c8b85">·</tspan></text>
+<rect x="629.4" y="528.0" width="41.5" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="636.4" fill="#1f1f1c">g</tspan><tspan x="645.6" fill="#1f1f1c">e</tspan><tspan x="654.7" fill="#1f1f1c">t</tspan></text>
+<rect x="606.3" y="528.0" width="64.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="629.4" y1="529.0" x2="629.4" y2="557.0" stroke="#ffffff" stroke-width="2" />
+<rect x="680.9" y="528.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="687.9" fill="#1f1f1c">u</tspan><tspan x="697.0" fill="#1f1f1c">s</tspan><tspan x="706.2" fill="#1f1f1c">e</tspan><tspan x="715.3" fill="#1f1f1c">r</tspan></text>
+<rect x="680.9" y="528.0" width="50.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="709.5" y="517.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="722.5" y="530.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
+<rect x="741.5" y="528.0" width="50.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="748.5" fill="#1f1f1c">n</tspan><tspan x="757.6" fill="#1f1f1c">a</tspan><tspan x="766.8" fill="#1f1f1c">m</tspan><tspan x="775.9" fill="#1f1f1c">e</tspan></text>
+<rect x="792.1" y="528.0" width="41.5" height="30.0" rx="0" fill="#fbe0d3" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="799.1" fill="#1f1f1c">(</tspan><tspan x="808.2" fill="#1f1f1c">)</tspan><tspan x="817.4" fill="#1f1f1c">;</tspan></text>
+<rect x="741.5" y="528.0" width="92.1" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="792.1" y1="529.0" x2="792.1" y2="557.0" stroke="#ffffff" stroke-width="2" />
+<rect x="811.5" y="517.0" width="26.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="824.5" y="530.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
+<rect x="843.5" y="528.0" width="68.9" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="548.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="850.5" fill="#8c8b85">↵</tspan><tspan x="859.7" fill="#8c8b85">·</tspan><tspan x="868.8" fill="#8c8b85">·</tspan><tspan x="878.0" fill="#8c8b85">·</tspan><tspan x="887.1" fill="#8c8b85">·</tspan><tspan x="896.3" fill="#1f1f1c">}</tspan></text>
+<rect x="843.5" y="528.0" width="68.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<text x="32.0" y="606.0" font-size="16" fill="#1f1f1c" text-anchor="start" font-weight="650" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Chinese: Traditional and Simplified spellings share the same cores</text>
+<text x="32.0" y="644.0" font-size="16" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >臺灣位於東亞。</text>
+<text x="170.0" y="644.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >4 → 3</text>
+<rect x="230.0" y="628.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="648.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="237.0" fill="#1f1f1c">台</tspan><tspan x="252.3" fill="#1f1f1c">湾</tspan></text>
+<rect x="230.0" y="628.0" width="44.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="256.6" y="617.0" width="22.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="267.6" y="630.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >繁</text>
+<rect x="284.6" y="628.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="648.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="291.6" fill="#1f1f1c">位</tspan><tspan x="306.9" fill="#1f1f1c">于</tspan></text>
+<rect x="284.6" y="628.0" width="44.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="311.2" y="617.0" width="22.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="322.2" y="630.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >繁</text>
+<rect x="339.2" y="628.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="648.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="346.2" fill="#1f1f1c">东</tspan><tspan x="361.5" fill="#1f1f1c">亚</tspan></text>
+<rect x="383.8" y="628.0" width="29.3" height="30.0" rx="0" fill="#fbe0d3" />
+<text y="648.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="390.8" fill="#1f1f1c">。</tspan></text>
+<rect x="339.2" y="628.0" width="73.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="383.8" y1="629.0" x2="383.8" y2="657.0" stroke="#ffffff" stroke-width="2" />
+<rect x="395.1" y="617.0" width="22.0" height="17.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="406.1" y="630.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >繁</text>
+<text x="32.0" y="688.0" font-size="16" fill="#1f1f1c" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >台湾位于东亚。</text>
+<text x="170.0" y="688.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >5 → 3</text>
+<rect x="230.0" y="672.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="692.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="237.0" fill="#1f1f1c">台</tspan><tspan x="252.3" fill="#1f1f1c">湾</tspan></text>
+<rect x="230.0" y="672.0" width="44.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="284.6" y="672.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="692.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="291.6" fill="#1f1f1c">位</tspan><tspan x="306.9" fill="#1f1f1c">于</tspan></text>
+<rect x="284.6" y="672.0" width="44.6" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<rect x="339.2" y="672.0" width="44.6" height="30.0" rx="0" fill="#d3f0e4" />
+<text y="692.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="346.2" fill="#1f1f1c">东</tspan><tspan x="361.5" fill="#1f1f1c">亚</tspan></text>
+<rect x="383.8" y="672.0" width="29.3" height="30.0" rx="0" fill="#fbe0d3" />
+<text y="692.0" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"><tspan x="390.8" fill="#1f1f1c">。</tspan></text>
+<rect x="339.2" y="672.0" width="73.9" height="30.0" rx="6" fill="none" stroke="#55544f" stroke-width="1.3" />
+<line x1="383.8" y1="673.0" x2="383.8" y2="701.0" stroke="#ffffff" stroke-width="2" />
+<rect x="32.0" y="715.0" width="14.0" height="14.0" rx="3" fill="#dbe9fb" stroke="#2a78d6" stroke-width="1" />
+<text x="52.0" y="726.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >prefix</text>
+<rect x="102.6" y="715.0" width="14.0" height="14.0" rx="3" fill="#d3f0e4" stroke="#138a60" stroke-width="1" />
+<text x="122.6" y="726.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >core</text>
+<rect x="159.0" y="715.0" width="14.0" height="14.0" rx="3" fill="#fbe0d3" stroke="#d4561f" stroke-width="1" />
+<text x="179.0" y="726.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >suffix</text>
+<rect x="229.6" y="715.0" width="14.0" height="14.0" rx="3" fill="#efeee9" stroke="#8c8b85" stroke-width="1" />
+<text x="249.6" y="726.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >standard token</text>
+<rect x="357.0" y="714.0" width="24.0" height="16.0" rx="8" fill="#fbecc4" stroke="#b27800" stroke-width="1" />
+<text x="369.0" y="727.0" font-size="11" fill="#1f1f1c" text-anchor="middle" font-weight="600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >Aa</text>
+<text x="389.0" y="726.0" font-size="13" fill="#55544f" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >variation: Aa = Capitalised, AA = UPPER, 繁 = Traditional, none = as-is</text>
+<text x="32.0" y="750.0" font-size="12" fill="#8c8b85" text-anchor="start" font-weight="400" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" >· = space, ↵ = newline. Cores are stored case-folded (and in Simplified for Chinese); identifiers are split at case changes (get|User|Name).</text>
 </svg>

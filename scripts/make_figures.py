@@ -1,4 +1,4 @@
-"""Generate the explanatory SVG figures in figures/ from the shipped pretrained tokenizers.
+"""Generate the SVG figures in figures/ from the shipped pretrained tokenizers and results/*.json.
 
     python scripts/make_figures.py
 """
@@ -10,7 +10,7 @@ from html import escape
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, ROOT)
-from cbpe import load  # noqa: E402
+from cbpe import CombinatorialBPE, load  # noqa: E402
 from cbpe.tokenizers import V_CAP, V_TRAD, V_UPPER  # noqa: E402
 
 OUT = os.path.join(ROOT, "figures")
@@ -137,46 +137,62 @@ def legend(svg, x, y, entries):
     return x
 
 
+# ------------------------------------------------------------ shared data
+MIX_STD = "mix_32768_bpe_gpt2.json"
+MIX_COMB = "mix_32768_comb.json"
+SRC_NAMES = {"en": "English", "de": "German", "fr": "French", "ru": "Russian", "ja": "Japanese", "zh": "Chinese",
+             "python": "Python", "javascript": "JavaScript", "java": "Java", "cpp": "C++", "go": "Go"}
+CODE_SRCS = ("python", "javascript", "java", "cpp", "go")
+
+
+def toks(tok, text):
+    if isinstance(tok, CombinatorialBPE):
+        return [(tok.prefixes[p], tok.core.vocab[c], tok.suffixes[x], v) for v, p, c, x in tok.encode(text)]
+    return [(tok.decode([i]),) for i in tok.encode(text)]
+
+
 # ------------------------------------------------------------ figure 1
 def fig_tokenization():
-    std = load(os.path.join(PRE, "wiki_en_16384_bpe_gpt2.json"))
-    comb = load(os.path.join(PRE, "wiki_en_16384_comb.json"))
-    zh = load(os.path.join(PRE, "wiki_zh_16384_comb_han.json"))
-    s = 'In 1969, NASA landed on the Moon (the first crewed landing). "Amazing!" said the President.'
-    std_toks = [(std.decode([i]),) for i in std.encode(s)]
-    comb_toks = [(comb.prefixes[p], comb.core.vocab[c], comb.suffixes[x], v) for v, p, c, x in comb.encode(s)]
-
+    std = load(os.path.join(PRE, MIX_STD))
+    comb = load(os.path.join(PRE, MIX_COMB))
+    examples = [
+        ("English", 'In 1969, NASA landed on the Moon (the first crewed landing). "Amazing!" said the President.'),
+        ("Code", "    if (userName != null) {\n        return getUserName();\n    }"),
+    ]
     W = 1000
-    svg = SVG(W, 560)
-    svg.text(32, 44, "Same text, two tokenizers (both with 16,384 embedding rows)", size=20, weight=650)
-    svg.text(32, 70, s, size=14, fill=INK2, family=MONO)
+    svg = SVG(W, 900)
+    svg.text(32, 44, "One tokenizer for prose, code and Chinese (both with 32,768 embedding rows)", size=20,
+             weight=650)
+    y = 64
+    for title, s in examples:
+        st, cb = toks(std, s), toks(comb, s)
+        svg.text(32, y + 26, f"{title}", size=16, weight=650)
+        svg.text(32, y + 48, s.replace("\n", " ↵ "), size=13, fill=INK2, family=MONO,
+                 extra='xml:space="preserve"')
+        svg.text(32, y + 80, f"Standard BPE — {len(st)} tokens", size=14, weight=600, fill=INK2)
+        y = flow(svg, 32, y + 92, W - 64, st, std_chip, gap=6, row_h=40)
+        svg.text(32, y + 8, f"Combinatorial BPE — {len(cb)} tokens", size=14, weight=600, fill=HUE["core"][0])
+        y = flow(svg, 32, y + 30, W - 64, cb, comb_chip, gap=10, row_h=48) + 4
 
-    svg.text(32, 112, f"Standard BPE (GPT-2 style) — {len(std_toks)} tokens", size=15, weight=600)
-    y = flow(svg, 32, 126, W - 64, std_toks, std_chip)
-    svg.text(32, y + 14, f"Combinatorial BPE — {len(comb_toks)} tokens, each one (variation, prefix, core, suffix)",
-             size=15, weight=600)
-    y = flow(svg, 32, y + 38, W - 64, comb_toks, comb_chip, gap=10, row_h=52)
-
-    # Chinese: Traditional and Simplified share cores
-    svg.text(32, y + 18, "Chinese: Traditional and Simplified spellings share the same cores", size=15, weight=600)
+    svg.text(32, y + 26, "Chinese: Traditional and Simplified spellings share the same cores", size=16, weight=650)
     y += 42
     for t in ["臺灣位於東亞。", "台湾位于东亚。"]:
-        toks = [(zh.prefixes[p], zh.core.vocab[c], zh.suffixes[x], v) for v, p, c, x in zh.encode(t)]
-        svg.text(32, y + 20, t, size=16, family=SANS)
-        flow(svg, 190, y + 4, W - 220, toks, comb_chip, gap=10)
+        svg.text(32, y + 22, t, size=16, family=SANS)
+        svg.text(170, y + 22, f"{len(toks(std, t))} → {len(toks(comb, t))}", size=12, fill=INK3)
+        flow(svg, 230, y + 6, W - 260, toks(comb, t), comb_chip, gap=10)
         y += 44
-    y += 10
+    y += 16
     x = legend(svg, 32, y, [("prefix", "pre"), ("core", "core"), ("suffix", "suf"), ("standard token", "std")])
     stroke, fill = HUE["var"]
     svg.rect(x, y - 12, 24, 16, fill, stroke, rx=8, sw=1)
     svg.text(x + 12, y + 1, "Aa", size=11, anchor="middle", weight=600)
     svg.text(x + 32, y, "variation: Aa = Capitalised, AA = UPPER, 繁 = Traditional, none = as-is", size=13, fill=INK2)
-    svg.text(32, y + 24, "· marks a space. Cores are stored case-folded (and in Simplified for Chinese); "
-             "the variation restores the surface form.", size=12, fill=INK3)
+    svg.text(32, y + 24, "· = space, ↵ = newline. Cores are stored case-folded (and in Simplified for Chinese); "
+             "identifiers are split at case changes (get|User|Name).", size=12, fill=INK3)
     svg.h = y + 44
-    svg.save("tokenization.svg", "Standard BPE vs Combinatorial BPE on the same text",
-             f"Standard BPE needs {len(std_toks)} tokens, Combinatorial BPE {len(comb_toks)}; "
-             "Traditional and Simplified Chinese map to identical cores.")
+    svg.save("tokenization.svg", "Standard BPE vs Combinatorial BPE on prose, code and Chinese",
+             "The same 32k-row budget: an English sentence, a code snippet and Chinese text need far fewer "
+             "combinatorial tokens; Traditional and Simplified Chinese map to identical cores.")
 
 
 # ------------------------------------------------------------ figure 2
@@ -195,6 +211,7 @@ def arrow(svg, x1, y1, x2, y2):
 
 
 def fig_factorization():
+    sz = load(os.path.join(PRE, MIX_COMB)).sizes
     W, H = 1000, 620
     svg = SVG(W, H)
     svg.text(32, 44, "How Combinatorial BPE works", size=20, weight=650)
@@ -221,17 +238,20 @@ def fig_factorization():
     svg.text(32, y + 44, "Standard BPE stores each of these as a separate vocabulary row;", size=13, fill=INK2)
     svg.text(32, y + 63, "here they all share the single core row  the.", size=13, fill=INK2)
 
-    # --- step 2: learned inventories
+    # --- step 2: learned inventories (the mixed prose + code tokenizer)
     x2 = 470
-    svg.text(x2, 84, "2  Learn the inventories (16k budget, English)", size=15, weight=600)
-    box(svg, x2, 102, 100, 118, "variation", "var", ["hand-coded", "as-is", "Aa  AA", "(繁 for zh)"])
-    box(svg, x2 + 110, 102, 115, 118, "prefix", "pre", ["learned", "108 rows", "' '  '\\n\\n'", "' ('  ' \"'"])
-    box(svg, x2 + 235, 102, 125, 118, "core", "core", ["learned BPE", "16,193 rows", "hello  apollo", "1969  台湾"])
-    box(svg, x2 + 370, 102, 118, 118, "suffix", "suf", ["learned", "80 rows", "','  '.'  '),'", "'.\"'  '。'"])
+    svg.text(x2, 84, "2  Learn the inventories (32k budget, 11 languages)", size=15, weight=600)
+    box(svg, x2, 102, 100, 118, "variation", "var", ["hand-coded", f"{sz['variation']} rows", "Aa  AA", "繁"])
+    box(svg, x2 + 110, 102, 115, 118, "prefix", "pre", ["learned", f"{sz['prefix']:,} rows", "' '  ' = '",
+                                                          "'↵····'  ' {↵'"])
+    box(svg, x2 + 235, 102, 125, 118, "core", "core", ["learned BPE", f"{sz['core']:,} rows", "the  user",
+                                                        "return  台湾"])
+    box(svg, x2 + 370, 102, 118, 118, "suffix", "suf", ["learned", f"{sz['suffix']:,} rows", "','  '();'",
+                                                         "'.'  '。'"])
     svg.text(x2, 250, "The affix/core split is learned: an affix is kept only if it saves", size=13, fill=INK2)
     svg.text(x2, 269, "more tokens than the core merge it would displace.", size=13, fill=INK2)
-    svg.text(x2, 294, "3 + 108 + 16,193 + 80 = 16,384 rows = same as a 16k standard vocab.", size=13, fill=INK2,
-             weight=600)
+    svg.text(x2, 294, f"{sz['variation']} + {sz['prefix']:,} + {sz['core']:,} + {sz['suffix']:,} = "
+             f"{sum(sz.values()):,} rows = a 32k standard vocab.", size=13, fill=INK2, weight=600)
 
     # --- step 3: model
     y0 = 395
@@ -251,7 +271,6 @@ def fig_factorization():
     svg.text(364, ty + 60, "Transformer", size=15, anchor="middle", weight=650)
     svg.text(364, ty + 80, "(unchanged)", size=12, anchor="middle", fill=INK3)
     arrow(svg, 446, ty + 65, 486, ty + 65)
-    # chained output head
     hx, hw = 490, 112
     chain = [("pre", "prefix", "p(pre | h)"), ("core", "core", "p(core | h, pre)"),
              ("var", "variation", "p(var | h, …)"), ("suf", "suffix", "p(suf | h, …)")]
@@ -273,13 +292,16 @@ def fig_factorization():
 
 # ------------------------------------------------------------ figure 3
 def fig_budget():
-    comp = json.load(open(os.path.join(ROOT, "results", "compression.json"), encoding="utf-8"))
-    r = next(x for x in comp if x["corpus"] == "wiki_en" and x["vocab"] == 16384)
-    red = r["bpe_cl100k"]["redundant_frac"]
-    sz = r["comb"]["sizes"]
-    W, H = 1000, 330
+    sys.path.insert(0, os.path.join(ROOT, "experiments"))
+    from bench_compression import redundancy
+    std = load(os.path.join(PRE, MIX_STD))
+    comb = load(os.path.join(PRE, MIX_COMB))
+    red = redundancy(std)[0]
+    sz = comb.sizes
+    N = sum(sz.values())
+    W, H = 1000, 300
     svg = SVG(W, H)
-    svg.text(32, 44, "Where 16,384 embedding rows go (English Wikipedia)", size=20, weight=650)
+    svg.text(32, 44, "Where 32,768 embedding rows go (prose + code tokenizer)", size=20, weight=650)
     bx, bw = 250, W - 250 - 40
 
     def bar(y, segs, label, sub):
@@ -296,22 +318,91 @@ def fig_budget():
 
     bar(80, [(1 - red, "std", f"distinct words / pieces  {100 * (1 - red):.0f}%"),
              (red, "dup", f"variants  {100 * red:.0f}%")],
-        "Standard BPE", "cl100k-style pretokenizer")
-    svg.text(bx + bw, 146, "e.g.  ' the'  ' The'  'The'  ' world'  ' World'  'World'  …", size=12,
+        "Standard BPE", "GPT-2-style pretokenizer")
+    svg.text(bx + bw, 146, "e.g.  'data'  'Data'  ' data'  ' Data'  'DATA'  ' DATA'  …", size=12,
              fill=HUE["dup"][0], family=MONO, anchor="end", extra='xml:space="preserve"')
-    small = (sz["variation"] + sz["prefix"] + sz["suffix"]) / 16384
-    bar(180, [(sz["core"] / 16384, "core", f"distinct cores  {sz['core']:,} rows  ({100 * (1 - small):.1f}%)"),
+    small = (sz["variation"] + sz["prefix"] + sz["suffix"]) / N
+    bar(180, [(sz["core"] / N, "core", f"distinct cores  {sz['core']:,} rows  ({100 * (1 - small):.1f}%)"),
               (small, "pre", "")],
         "Combinatorial BPE", "same budget")
     svg.text(bx + bw - 4, 246, f"variation + prefix + suffix: {sz['variation']} + {sz['prefix']} + {sz['suffix']} rows "
              f"({100 * small:.1f}%)", size=12, fill=HUE["pre"][0], anchor="end")
-    svg.text(32, 290, f"Result on held-out text: {r['comb']['chars_per_token']:.2f} vs "
-             f"{max(r['bpe_gpt2']['chars_per_token'], r['bpe_cl100k']['chars_per_token']):.2f} characters per token "
-             f"({100 * (1 - r['comb']['tokens'] / min(r['bpe_gpt2']['tokens'], r['bpe_cl100k']['tokens'])):.0f}% "
-             "fewer tokens). No standard vocab reaches it: even 262k rows tops out at 4.86.", size=13, fill=INK2)
     svg.save("vocab_budget.svg", "Vocabulary budget: standard vs combinatorial",
-             f"About {100 * red:.0f}% of a standard 16k vocabulary are case/space/punctuation variants; the "
+             f"About {100 * red:.0f}% of a standard 32k vocabulary are case/space/punctuation variants; the "
              f"combinatorial vocabulary spends {100 * (1 - small):.1f}% of rows on distinct cores.")
+
+
+# ------------------------------------------------------------ headline figure
+def fig_headline():
+    comp = json.load(open(os.path.join(ROOT, "results", "mix_compression.json")))
+    runs = {r["tokenizer"]: r for r in json.load(open(os.path.join(ROOT, "results", "lm_mix3x.json")))}
+    std_lm, comb_lm = runs[MIX_STD], runs[MIX_COMB]
+    std_c, comb_c = comp["bpe_gpt2"]["chars_per_token"], comp["comb"]["chars_per_token"]
+
+    def fewer_tokens(src):
+        return 100 * (1 - std_c[src] / comb_c[src])
+
+    def better_bpb(src):
+        a = std_lm["final_by_source"][f"val_mix_{src}.txt"]["val_bpb"]
+        b = comb_lm["final_by_source"][f"val_mix_{src}.txt"]["val_bpb"]
+        return 100 * (1 - b / a)
+
+    std_all = load(os.path.join(PRE, MIX_STD))
+    comb_all = load(os.path.join(PRE, MIX_COMB))
+    with open(os.path.join(ROOT, "data", "mix.test.txt"), encoding="utf-8") as f:
+        mixed = f.read()
+    tok_all = 100 * (1 - len(comb_all.encode(mixed)) / len(std_all.encode(mixed)))
+    bpb_all = 100 * (1 - comb_lm["curve"][-1]["val_bpb"] / std_lm["curve"][-1]["val_bpb"])
+
+    code = sorted(CODE_SRCS, key=better_bpb, reverse=True)
+    prose = sorted((s for s in SRC_NAMES if s not in CODE_SRCS), key=better_bpb, reverse=True)
+    rows = [("All sources (mixed)", tok_all, bpb_all, True), None]
+    rows += [("CODE", None, None, False)] + [(SRC_NAMES[s], fewer_tokens(s), better_bpb(s), False) for s in code]
+    rows += [("NATURAL LANGUAGE", None, None, False)] + [(SRC_NAMES[s], fewer_tokens(s), better_bpb(s), False)
+                                                        for s in prose]
+
+    W = 1000
+    lx, ax0, ax1, bx0, bx1 = 32, 210, 545, 615, 950
+    tmax, bmax = 60, 10
+    svg = SVG(W, 700)
+    svg.text(32, 44, "One tokenizer, one model, 11 languages: Combinatorial vs standard BPE", size=20, weight=650)
+    svg.text(32, 68, "Same 32,768 embedding rows, same 8-layer GPT, same compute (22,500 steps × 16k tokens) on "
+             "Wikipedia in 6 languages + GitHub code in 5 languages.", size=13, fill=INK2)
+    y = 112
+    svg.text(ax0, y, "Fewer tokens for the same text", size=15, weight=650)
+    svg.text(bx0, y, "Better language model (lower bits/byte)", size=15, weight=650)
+    y += 12
+    for ax, amax, step in ((ax0, tmax, 10), (bx0, bmax, 2)):
+        x_end = ax1 if ax == ax0 else bx1
+        for t in range(0, amax + 1, step):
+            x = ax + (x_end - ax) * t / amax
+            svg.line(x, y + 6, x, y + 10 + 30 * 15, stroke="#efeee9", sw=1)
+            svg.text(x, y + 2, f"{t}%", size=10, fill=INK3, anchor="middle")
+    y += 18
+    for row in rows:
+        if row is None:
+            y += 8
+            continue
+        label, t, b, strong = row
+        if t is None:
+            svg.text(lx, y + 18, label, size=11, fill=INK3, weight=650, extra='letter-spacing="1"')
+            y += 26
+            continue
+        svg.text(lx, y + 17, label, size=14 if strong else 13, weight=650 if strong else 400)
+        for val, a0, a1, amax in ((t, ax0, ax1, tmax), (b, bx0, bx1, bmax)):
+            w = (a1 - a0) * max(val, 0) / amax
+            color = HUE["core"][0] if strong else "#1baf7a"
+            svg.rect(a0, y + 5, w, 18, color, rx=3)
+            svg.text(a0 + w + 6, y + 18, f"{val:.1f}%", size=12, fill=INK, weight=650 if strong else 400)
+        y += 30
+    y += 14
+    svg.text(32, y, "Bits per byte on held-out text is tokenizer-independent; standard BPE = byte-level BPE with GPT-2 "
+             "pretokenization trained on the same data (the stronger of two baselines).", size=11, fill=INK3)
+    svg.text(32, y + 17, "Combinatorial BPE is also better at equal data (−1.0%) and on every source; with 3× less "
+             "training the two are roughly level. Single seed, 42–45M-parameter models.", size=11, fill=INK3)
+    svg.h = y + 36
+    svg.save("headline.svg", "Combinatorial BPE vs standard BPE on 11 languages",
+             f"{tok_all:.0f}% fewer tokens and {bpb_all:.1f}% lower bits per byte overall, better on all 11 sources.")
 
 
 # ------------------------------------------------------------ figure 4
@@ -440,9 +531,112 @@ def fig_equal_tokens():
              "and levels off near 4.86 characters per token; at matched token counts the language models are "
              "within 0.5-2.6% bits-per-byte.")
 
+# ------------------------------------------------------------ efficiency figure
+def train_macs_per_token(run, comb):
+    """Forward multiply-accumulates per token for the GPT in experiments/lm.py."""
+    a = run["args"]
+    d, L, ctx, hh = a["d"], a["layers"], a["ctx"], a.get("head_hidden", 1)
+    blocks = 12 * d * d * L + 2 * L * ctx * d          # weight matmuls + attention over the context
+    out = sum(run["sizes"]) * d                        # tied output projections (every factor table)
+    head = 3 * (2 * d * hh * d + hh * d * d) if comb else 0   # chained head MLPs
+    return blocks + out + head
+
+
+def fig_efficiency():
+    import math
+    runs = {r["tokenizer"]: r for r in json.load(open(os.path.join(ROOT, "results", "lm_mix3x.json")))}
+    std, comb = runs[MIX_STD], runs[MIX_COMB]
+    tpstep = std["args"]["bs"] * std["args"]["ctx"]
+
+    def series(run, is_comb):
+        m = train_macs_per_token(run, is_comb)
+        return [(6 * m * p["step"] * tpstep / 1e15, p["bytes"] / 1e9, p["val_bpb"]) for p in run["curve"] if p["step"]]
+
+    S, C = series(std, False), series(comb, True)
+    target = S[-1][2]
+
+    def crossing(pts, k):
+        for p0, p1 in zip(pts, pts[1:]):
+            if p0[2] >= target >= p1[2]:
+                t = (p0[2] - target) / (p0[2] - p1[2])
+                return p0[k] + t * (p1[k] - p0[k])
+
+    W, H = 1000, 520
+    svg = SVG(W, H)
+    svg.text(32, 44, "Compute efficiency vs data efficiency (mixed prose + code run)", size=20, weight=650)
+    svg.text(32, 68, "Validation bits per byte (lower is better) against training compute and against training text "
+             "read. Same 8-layer GPT, same 32k embedding rows.", size=13, fill=INK2)
+    STD_C, COMB_C, MATCH_C = "#6b6b66", HUE["core"][0], HUE["pre"][0]
+    y0, y1, v0, v1 = 110, 400, 1.20, 1.60
+
+    def panel(px0, px1, k, xmax, xstep, xfmt, xlabel, title, saving_label):
+        def X(v):
+            return px0 + v / xmax * (px1 - px0)
+
+        def Y(v):
+            return y1 - (v - v0) / (v1 - v0) * (y1 - y0)
+
+        svg.text(px0 - 48, 100, title, size=15, weight=650)
+        cid = f"clip{px0}"
+        svg.add(f'<clipPath id="{cid}"><rect x="{px0}" y="{y0}" width="{px1 - px0}" height="{y1 - y0}"/></clipPath>')
+        for v in [1.20, 1.25, 1.30, 1.35, 1.40, 1.45, 1.50, 1.55, 1.60]:
+            svg.line(px0, Y(v), px1, Y(v), stroke="#efeee9", sw=1)
+            svg.text(px0 - 8, Y(v) + 4, f"{v:.2f}", size=11, fill=INK3, anchor="end")
+        t = 0
+        while t <= xmax + 1e-9:
+            svg.line(X(t), y1, X(t), y1 + 4, stroke=INK3, sw=1)
+            svg.text(X(t), y1 + 18, xfmt(t), size=11, fill=INK3, anchor="middle")
+            t += xstep
+        svg.line(px0, y1, px1, y1, stroke=INK3, sw=1)
+        svg.text((px0 + px1) / 2, y1 + 38, xlabel, size=12, fill=INK2, anchor="middle")
+        # baseline's final quality
+        svg.line(px0, Y(target), px1, Y(target), stroke=MATCH_C, sw=1.2, extra='stroke-dasharray="4 4"')
+        for pts, color, dash in ((S, STD_C, 'stroke-dasharray="7 5"'), (C, COMB_C, "")):
+            d = " ".join(f"{'M' if i == 0 else 'L'}{X(p[k]):.1f},{Y(p[2]):.1f}" for i, p in enumerate(pts))
+            svg.add(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="2.2" {dash} '
+                    f'clip-path="url(#{cid})"/>')
+            svg.add(f'<circle cx="{X(pts[-1][k]):.1f}" cy="{Y(pts[-1][2]):.1f}" r="4.5" fill="{color}" '
+                    f'stroke="#ffffff" stroke-width="2"/>')
+        # where the combinatorial model reaches the baseline's final quality
+        xc, xs = crossing(C, k), S[-1][k]
+        svg.add(f'<circle cx="{X(xc):.1f}" cy="{Y(target):.1f}" r="7" fill="none" stroke="{MATCH_C}" '
+                f'stroke-width="1.6"/>')
+        svg.line(X(xc), Y(target), X(xc), y1, stroke=MATCH_C, sw=1, extra='stroke-dasharray="2 3"')
+        svg.line(X(xs), Y(target), X(xs), y1, stroke=MATCH_C, sw=1, extra='stroke-dasharray="2 3"')
+        ya = Y(1.213)
+        arrows = 'marker-end="url(#arr)" marker-start="url(#arr)"' if X(xs) - X(xc) > 40 else ""
+        svg.line(X(xc) + 2, ya, X(xs) - 2, ya, stroke=MATCH_C, sw=1.4, extra=arrows)
+        saving = 100 * (1 - xc / xs)
+        label = f"{saving:.0f}% {saving_label}" if saving >= 10 else f"{saving:.1f}% {saving_label}"
+        svg.text(min((X(xc) + X(xs)) / 2, px1 - 70), ya - 9, label, size=13, fill=MATCH_C,
+                 anchor="middle", weight=650)
+        return saving
+
+    comp = panel(88, 450, 0, 110, 20, lambda t: f"{t:.0f}", "training compute (PFLOP)",
+                 "A   Per unit of compute", "less compute")
+    data = panel(588, 950, 1, 2.0, 0.5, lambda t: f"{t:.1f}", "training text read (GB)",
+                 "B   Per byte of training data", "less data")
+    # legend + notes
+    ly = H - 58
+    svg.line(88, ly, 118, ly, stroke="#6b6b66", sw=2.2, extra='stroke-dasharray="7 5"')
+    svg.text(126, ly + 4, "Standard BPE (GPT-2 style)", size=13, fill=INK2)
+    svg.line(330, ly, 360, ly, stroke=HUE["core"][0], sw=2.2)
+    svg.text(368, ly + 4, "Combinatorial BPE", size=13, fill=INK2)
+    svg.line(530, ly, 560, ly, stroke=HUE["pre"][0], sw=1.2, extra='stroke-dasharray="4 4"')
+    svg.text(568, ly + 4, f"standard BPE's final quality ({target:.3f})", size=13, fill=INK2)
+    svg.text(32, H - 24, "FLOPs = 6 × forward multiply-adds per token × tokens; the combinatorial model costs ~5% more "
+             "per token (larger output head) and is charged for it. Its savings are measured mid-schedule,", size=11,
+             fill=INK3)
+    svg.text(32, H - 9, "before learning-rate decay, so they are conservative. Single seed.", size=11, fill=INK3)
+    svg.save("efficiency.svg", "Compute efficiency vs data efficiency",
+             f"Combinatorial BPE reaches standard BPE's final bits-per-byte with {comp:.0f}% less training compute "
+             f"and {data:.0f}% less training data.")
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     fig_tokenization()
     fig_factorization()
     fig_budget()
     fig_equal_tokens()
+    fig_headline()
+    fig_efficiency()
