@@ -231,3 +231,25 @@ Production reference, GPT-4's `cl100k_base` (100k vocab): python 4.19, java 4.57
 
 ![lm_js](lm_js.png)
 
+## Language modelling: JavaScript, 3x longer (7,500 steps) (same 8-layer GPT, 7500 steps x 16k tokens)
+
+| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
+|---|---:|---:|---:|---:|---|
+| BPE (cl100k regex) 16k | 33.8M | 3.74 | **0.7516** | 0.7516 | - |
+| Comb + camel 16k, chain head (prefix first) | 36.2M | 6.69 | **0.6933** | 0.7718 | 0.012 / 0.091 / 0.494 / 0.097 |
+
+\* learning curve interpolated at 459M training bytes (what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.
+
+![lm_js_long](lm_js_long.png)
+
+## Language modelling: English Wikipedia, 3x longer (7,500 steps) (same 8-layer GPT, 7500 steps x 16k tokens)
+
+| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
+|---|---:|---:|---:|---:|---|
+| BPE (GPT-2 regex) 16k | 33.8M | 3.82 | **1.3357** | 1.3357 | - |
+| Comb 16k, chain head (prefix first) | 36.2M | 5.02 | **1.3032** | 1.3220 | 0.015 / 0.057 / 1.149 / 0.082 |
+
+\* learning curve interpolated at 469M training bytes (what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.
+
+![lm_en_long](lm_en_long.png)
+

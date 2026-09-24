@@ -59,22 +59,26 @@ def tinystories():
     print(f"tinystories: {len(docs)} docs")
     write_split("tinystories", docs)
 
-def wiki_lm(lang="en", target_chars=250e6):
-    """Extra text for LM training from shard 1 (disjoint from the tokenizer train/test shard 0)."""
+def wiki_lm(lang="en", target_chars=250e6, suffix="_lm"):
+    """Extra text for LM training from shards 1, 2, ... (disjoint from the tokenizer train/test shard 0)."""
     fs = HfFileSystem()
-    shard = sorted(p for p in fs.ls(f"datasets/wikimedia/wikipedia/20231101.{lang}", detail=False)
-                   if "train-00001-of-" in p)[0]
+    shards = sorted(p for p in fs.ls(f"datasets/wikimedia/wikipedia/20231101.{lang}", detail=False)
+                    if p.endswith(".parquet"))[1:]
     out, total = [], 0
-    with fs.open(shard, "rb", block_size=8 * 2**20) as fh:
-        pf = pq.ParquetFile(fh)
-        for rg in range(pf.num_row_groups):
-            for text in pf.read_row_group(rg, columns=["text"]).column("text").to_pylist():
-                if len(text.strip()) >= 200:
-                    out.append(text.strip())
-                    total += len(text)
-            if total >= target_chars:
-                break
-    path = os.path.join(DATA, f"wiki_{lang}_lm.txt")
+    for shard in shards:
+        with fs.open(shard, "rb", block_size=8 * 2**20) as fh:
+            pf = pq.ParquetFile(fh)
+            for rg in range(pf.num_row_groups):
+                for text in pf.read_row_group(rg, columns=["text"]).column("text").to_pylist():
+                    if len(text.strip()) >= 200:
+                        out.append(text.strip())
+                        total += len(text)
+                if total >= target_chars:
+                    break
+        print(f"  {total / 1e6:.0f}M chars after {shard.rsplit('/', 1)[-1]}", flush=True)
+        if total >= target_chars:
+            break
+    path = os.path.join(DATA, f"wiki_{lang}{suffix}.txt")
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n\n".join(out))
     print(f"{path}: {len(out)} docs, {total / 1e6:.0f}M chars")
@@ -121,7 +125,7 @@ def code(targets=CODE_LANGS, test_frac=0.1):
             print(f"  {path}: {len(docs)} files, {os.path.getsize(path) / 1e6:.1f} MB")
 
 
-def code_lm(lang="JavaScript", target_chars=300e6, first_shard=1, test_frac=0.1):
+def code_lm(lang="JavaScript", target_chars=300e6, first_shard=1, test_frac=0.1, suffix="_lm"):
     """LM training text for one language: shards after the tokenizer data, and only repositories
     on the train side of the same repo-hash split, so the test repos stay unseen."""
     import zlib
@@ -147,7 +151,7 @@ def code_lm(lang="JavaScript", target_chars=300e6, first_shard=1, test_frac=0.1)
         if total >= target_chars:
             break
     name = "code_" + {"C++": "cpp", "GO": "go"}.get(lang, lang.lower())
-    path = os.path.join(DATA, f"{name}_lm.txt")
+    path = os.path.join(DATA, f"{name}{suffix}.txt")
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n\n".join(out))
     print(f"{path}: {len(out)} files, {total / 1e6:.0f}M chars")

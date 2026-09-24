@@ -30,10 +30,12 @@ trailing punctuation.
   split between them are learned from data. For Japanese and Chinese the learned suffixes turn
   out to be `，` `。` `、` `」`, and the prefixes include `「` `《` and the full-width space.
 - **Encoding is lossless** for any input (UTF-8 byte fallback).
-- **Honest caveat:** in small-scale language-model tests (~34M params, 41M training tokens) the
-  shorter sequences do **not yet** turn into better bits-per-byte. At an equal token count
-  it is within 0.5% of a 128k standard BPE with 14× fewer embedding rows; at an equal vocab
-  size it is 0.8% (English) to 3.2% (Chinese) behind. See [Results](#results) and
+- **Language modelling (small scale, ~34M params): with longer training it wins.** At 123M
+  training tokens it beats standard BPE on bits-per-byte by **2.4% on English** and **7.8% on
+  JavaScript** at equal compute, pulling ahead after ~2,000 steps in both. On English it is ahead
+  even at equal data (−1.0%). In short runs (41M tokens) it is still behind: 0.8% (English),
+  3.2% (Chinese), 4.5% (JavaScript). At an equal token count it is within 0.5% of a 128k
+  standard BPE with 14× fewer embedding rows. See [Results](#results) and
   [Limitations](#limitations--open-questions).
 
 ## How it works
@@ -165,7 +167,24 @@ repositories:
 
   The gap to the best baseline shrinks steadily during training: +15% at step 1,000, +12% at
   1,500, +6.3% at 2,000, +4.5% at 2,500. The combinatorial model is still improving fastest at
-  the end. The affixes are the costly part: prefix + suffix cost 0.27 bpb (vs 0.14 on English),
+  the end.
+
+  **With 3× longer training it wins.** Same setup, 7,500 steps (123M tokens), 900M characters
+  of training repositories:
+
+  | tokenizer (16k) | val bpb, 7,500 steps |
+  |---|---:|
+  | BPE, cl100k regex | 0.752 |
+  | **Comb + camel** | **0.693 (−7.8%)** |
+
+  It pulls ahead at step ~2,000 and the lead grows to the end (−4.3% at 3,000, −7.0% at 5,000,
+  −7.8% at 7,500). This is an *equal-compute* result. In the same number of steps the
+  combinatorial model reads 822M bytes vs 459M, because each token carries ~1.8× more text. At
+  equal *data* (459M bytes) its interpolated curve is ~2.7% behind, but that point is
+  mid-schedule for it (learning rate not yet decayed), so a data-matched run is still needed.
+  Single seed per run.
+
+  ![JavaScript long run](results/lm_js_long.png) The affixes are the costly part: prefix + suffix cost 0.27 bpb (vs 0.14 on English),
   because prefixes such as `'\n    }\n\n    '` pack closing braces and layout into one
   prediction made by the small output head.
 
@@ -179,6 +198,7 @@ the core, then the variation, then the suffix, each conditioned on the parts bef
 | comparison | standard BPE | Combinatorial BPE |
 |---|---:|---:|
 | English, equal vocab (16k) | **1.512** | 1.524 (+0.8%) |
+| English, equal vocab (16k), **3× longer (7,500 steps)** | 1.336 | **1.303 (−2.4%)** |
 | English, equal token count (128k vs 9.3k) | **1.518** (92.6M params) | 1.526 (+0.5%, 32.6M params) |
 | English, equal token count (16k vs 4k) | **1.512** | 1.551 (+2.6%) |
 | Chinese, equal vocab (16k) | **1.886** | 1.987 (+5.4%) / 1.947 with Traditional (+3.2%) |
@@ -191,6 +211,13 @@ the same text in the same number of forward passes. At ~4.8 chars/token, standar
 within 0.5%.
 
 ![English LM learning curves](results/lm.png)
+
+**Longer training (English).** With 3× the steps (7,500 steps, 123M tokens, 700M characters of
+Wikipedia), Combinatorial BPE overtakes the baseline at ~2,000 steps and finishes **2.4% better
+(1.303 vs 1.336 bpb)**. It reads 617M vs 469M bytes in those steps; interpolated at the
+baseline's 469M bytes it is still 1.0% ahead, so on English the advantage holds at equal data too.
+
+![English long run](results/lm_en_long.png)
 
 What the experiments showed:
 - **The output head matters.** Plain linear conditioning was +3.7%; the chained head brought it
@@ -209,9 +236,14 @@ What the experiments showed:
 
 ## Limitations & open questions
 
-- **Small scale only.** All LM results use ~30–90M-parameter models and ≤ 41M training tokens.
-  The gap closed during late training in English, and the combinatorial model was ahead early
-  on, but nothing here shows whether it closes or flips at scale.
+- **Small scale only.** All LM results use ~30–90M-parameter models and ≤ 123M training
+  tokens, one seed per run. Longer training flipped both English (+0.8% → −2.4%) and JavaScript
+  (+4.5% → −7.8%) in favour of Combinatorial BPE; Chinese has not been repeated at that length,
+  and nothing here shows how it behaves at real model scale.
+- **Equal compute vs equal data.** The wins are at equal training compute, where shorter
+  sequences let the model read more text in the same number of steps. Interpolated at equal
+  data, English is still ahead (−1.0%) but JavaScript is behind (+2.7%); both of those points are
+  mid-schedule for the combinatorial model, so data-matched runs are still needed.
 - **Punctuation might deserve its own position.** A hybrid (case and space folding, but
   punctuation as separate tokens) or a small local transformer over the four factors
   (MEGABYTE / RQ-Transformer style) are the obvious next experiments.

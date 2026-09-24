@@ -150,7 +150,8 @@ def lm(lines, name="lm", lang="English"):
     if not os.path.exists(path):
         return
     runs = json.load(open(path))
-    lines += [f"## Language modelling: {lang} (same 8-layer GPT, 2500 steps x 16k tokens)", "",
+    steps = runs[0]["args"]["steps"]
+    lines += [f"## Language modelling: {lang} (same 8-layer GPT, {steps} steps x 16k tokens)", "",
               "| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | "
               "bpb parts: case / prefix / core / suffix |",
               "|---|---:|---:|---:|---:|---|"]
@@ -208,6 +209,8 @@ if __name__ == "__main__":
     lm(lines, "lm_zh", "Chinese")
     lm(lines, "lm_iso", "English (equal token count)")
     lm(lines, "lm_js", "JavaScript")
+    lm(lines, "lm_js_long", "JavaScript, 3x longer (7,500 steps)")
+    lm(lines, "lm_en_long", "English Wikipedia, 3x longer (7,500 steps)")
     with open(os.path.join(RES, "REPORT.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print("\n".join(lines))
