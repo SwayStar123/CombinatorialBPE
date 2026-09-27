@@ -310,3 +310,47 @@ Final bits-per-byte per source:
 
 ![per-source trajectories](lm_mix3x_sources.png)
 
+## Language modelling: learning-rate sweep, modern recipe (RoPE, SwiGLU, QK-norm, Muon), 3,000 steps (same 8-layer GPT, 3000 steps x 16k tokens)
+
+| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
+|---|---:|---:|---:|---:|---|
+| BPE (GPT-2 regex) 32k | 42.1M | 3.61 | **1.4423** | 1.4423 | - |
+| Comb 32k, modern_muon_lr1e-3 | 44.5M | 5.23 | **1.3979** | 1.4422 | 0.021 / 0.067 / 1.189 / 0.121 |
+| BPE (GPT-2 regex) 32k | 42.1M | 3.61 | **1.4191** | 1.4191 | - |
+| Comb 32k, modern_muon_lr2e-3 | 44.5M | 5.23 | **1.3727** | 1.4219 | 0.019 / 0.067 / 1.170 / 0.117 |
+| BPE (GPT-2 regex) 32k | 42.1M | 3.61 | **1.4079** | 1.4079 | - |
+| Comb 32k, modern_muon_lr4e-3 | 44.5M | 5.23 | **1.3643** | 1.4162 | 0.018 / 0.066 / 1.165 / 0.115 |
+
+\* learning curve interpolated at 177M training bytes (what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.
+
+![lm_sweep](lm_sweep.png)
+
+## Language modelling: mixed prose + code, modern recipe, 22,500 steps, 32k budget (same 8-layer GPT, 22500 steps x 16k tokens)
+
+| run | params | bytes/token | val bits-per-byte (equal compute) | at equal bytes seen* | bpb parts: case / prefix / core / suffix |
+|---|---:|---:|---:|---:|---|
+| BPE (GPT-2 regex) 32k | 42.1M | 3.61 | **1.2377** | 1.2377 | - |
+| Comb 32k, modern_muon_lr0.004 | 44.5M | 5.23 | **1.1867** | 1.2311 | 0.016 / 0.056 / 1.019 / 0.097 |
+
+\* learning curve interpolated at 1330M training bytes (what the standard BPE saw), i.e. equal data instead of equal compute. Caveat: the combinatorial runs are mid-schedule (learning rate not yet decayed) at that point, which exaggerates their gap.
+
+Final bits-per-byte per source:
+
+| source | BPE (GPT-2 regex) 32k | Comb 32k, modern_muon_lr0.004 |
+|---|---:|---:|
+| cpp | 0.9639 | **0.9119** |
+| de | 1.4824 | **1.4250** |
+| en | 1.4239 | **1.3901** |
+| fr | 1.4119 | **1.3654** |
+| go | 0.8662 | **0.7887** |
+| ja | 1.2720 | **1.2433** |
+| java | 0.7138 | **0.6661** |
+| javascript | 0.9392 | **0.8748** |
+| python | 0.9196 | **0.8354** |
+| ru | 0.8353 | **0.7938** |
+| zh | 1.7708 | **1.7048** |
+
+![lm_mix3x_modern](lm_mix3x_modern.png)
+
+![per-source trajectories](lm_mix3x_modern_sources.png)
+

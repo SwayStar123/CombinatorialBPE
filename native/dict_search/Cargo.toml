@@ -1,0 +1,12 @@
+[package]
+name = "dict_search"
+version = "0.1.0"
+edition = "2021"
+description = "Reversible factored dictionary search for unrestricted Combinatorial BPE (exact 3-state min-token encoder)"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

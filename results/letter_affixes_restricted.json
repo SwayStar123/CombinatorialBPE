@@ -1,0 +1,15 @@
+{
+ "prefixes": [
+  "re",
+  "er",
+  "ex",
+  "un"
+ ],
+ "suffixes": [
+  "s",
+  "ed",
+  "ing",
+  "ment",
+  "ly"
+ ]
+}

@@ -16,21 +16,26 @@ trailing punctuation. Only the case rules are hand-coded; everything else is lea
 
 ## Main result: one tokenizer and one model for 11 languages
 
-A single 32k tokenizer and a single small GPT (8 layers, 42–45M parameters) trained on a mix of
-Wikipedia in 6 languages and GitHub code in 5 languages. Both tokenizers get the same number
-of embedding rows, and both models get the same compute (22,500 steps × 16k tokens):
+A single 32k tokenizer and a single small GPT trained on a mix of Wikipedia in 6 languages and
+GitHub code in 5 languages. The GPT has 8 layers and 42–45M parameters, and uses a modern
+recipe: RoPE, RMSNorm, QK-norm, SwiGLU and the Muon optimizer, with the learning rate tuned for
+each tokenizer. Both tokenizers get the same number of embedding rows, and both models get the
+same compute (22,500 steps × 16k tokens):
 
 ![Fewer tokens and better bits-per-byte on all 11 sources](figures/headline.svg)
 
 - **32% fewer tokens** for the same text overall: 22–25% on natural language, 42–50% on code.
-- **3.7% lower bits-per-byte** overall (1.261 vs 1.309), and **better on every one of the 11
-  sources**. The biggest gains are on code (Python −8.8%, Go −7.5%, Java −5.9%).
-- **It is both more compute-efficient and more data-efficient.** It reaches the baseline's final
-  quality with **32% less training compute** and **6.5% less training data** (conservative: that
-  point is before its learning-rate decay). At the baseline's full 1,330M bytes it is 1.0% better.
-- **The advantage needs enough training.** With a third of the training (7,500 steps) the two
-  models are roughly level (−0.6%). The per-source curves show the pattern: behind very early,
-  ahead from step ~4,500 on everywhere.
+- **4.1% lower bits-per-byte** overall (1.187 vs 1.238), and **better on every one of the 11
+  sources**. The biggest gains are on code (Python −9.2%, Go −8.9%, JavaScript −6.9%).
+- **More compute-efficient and slightly more data-efficient.** It reaches the baseline's final
+  quality with **30% less training compute** and 2.9% less training data (conservative: that
+  point is before its learning-rate decay). At the baseline's full 1,330M bytes of text it is
+  0.5% better.
+- **Robust to the training recipe and the learning rate.** It led from the first checkpoint on,
+  at all three learning rates in the sweep (−3.1% to −3.3% after 3,000 steps). With an older
+  GPT-2-style recipe (learned positions, LayerNorm, AdamW) the result is similar: −3.7% overall,
+  better on all 11 sources. That recipe needs more training before the advantage shows; at a
+  third of the steps the two are level.
 
 ![Compute efficiency vs data efficiency](figures/efficiency.svg)
 
@@ -39,21 +44,24 @@ of embedding rows, and both models get the same compute (22,500 steps × 16k tok
 
 | source | fewer tokens | standard BPE (bpb) | Combinatorial BPE (bpb) | Δ bpb |
 |---|---:|---:|---:|---:|
-| **all (mixed)** | **32%** | 1.309 | **1.261** | **−3.7%** |
-| Python | 46% | 0.983 | **0.896** | −8.8% |
-| Go | 50% | 0.931 | **0.861** | −7.5% |
-| Java | 42% | 0.766 | **0.721** | −5.9% |
-| Russian | 25% | 0.892 | **0.850** | −4.8% |
-| JavaScript | 47% | 0.998 | **0.955** | −4.3% |
-| C++ | 46% | 1.029 | **0.987** | −4.1% |
-| German | 24% | 1.572 | **1.516** | −3.5% |
-| Chinese | 22% | 1.861 | **1.795** | −3.5% |
-| English | 24% | 1.512 | **1.472** | −2.7% |
-| French | 24% | 1.492 | **1.451** | −2.7% |
-| Japanese | 23% | 1.338 | **1.309** | −2.2% |
+| **all (mixed)** | **32%** | 1.238 | **1.187** | **−4.1%** |
+| Python | 46% | 0.920 | **0.835** | −9.2% |
+| Go | 50% | 0.866 | **0.789** | −8.9% |
+| JavaScript | 47% | 0.939 | **0.875** | −6.9% |
+| Java | 42% | 0.714 | **0.666** | −6.7% |
+| C++ | 46% | 0.964 | **0.912** | −5.4% |
+| Russian | 25% | 0.835 | **0.794** | −5.0% |
+| German | 24% | 1.482 | **1.425** | −3.9% |
+| Chinese | 22% | 1.771 | **1.705** | −3.7% |
+| French | 24% | 1.412 | **1.365** | −3.3% |
+| English | 24% | 1.424 | **1.390** | −2.4% |
+| Japanese | 23% | 1.272 | **1.243** | −2.3% |
 
-![Per-source gap over training](results/lm_mix3x_sources.png)
-![Learning curves](results/lm_mix3x.png)
+![Per-source gap over training](results/lm_mix3x_modern_sources.png)
+![Learning curves](results/lm_mix3x_modern.png)
+
+Older GPT-2-style recipe, same data and steps: [learning curves](results/lm_mix3x.png),
+[per-source gap](results/lm_mix3x_sources.png).
 
 </details>
 
@@ -86,6 +94,7 @@ of embedding rows, and both models get the same compute (22,500 steps × 16k tok
 
 ```bash
 pip install -e .            # runtime dependency: regex
+cd native/bpe_train && cargo build --release   # optional: Rust merge loop, same results, faster training
 ```
 
 ```python
@@ -106,6 +115,7 @@ tok.save("my_tokenizer.json")
 
 | file in [`pretrained/`](pretrained) | trained on | budget |
 |---|---|---|
+| `mix_163840_comb.json` / `mix_163840_bpe_gpt2.json` | same mix, at Kimi K3's vocabulary size (Comb / baseline) | 164k |
 | `mix_32768_comb.json` | 6 languages + 5 programming languages (camelCase + Traditional) | 32k |
 | `mix_32768_bpe_gpt2.json` | same data, standard BPE baseline | 32k |
 | `multi_32768_comb.json` | en, de, fr, ru, tr, hi Wikipedia | 32k |
@@ -123,6 +133,22 @@ variation), code +61% to +83%. On code a 16k Combinatorial BPE needs 32–40% fe
 GPT-4's 100k-entry `cl100k_base`. Standard BPE cannot catch up by growing: on English it levels
 off at ~4.86 chars/token even with 262k entries, where Combinatorial BPE reaches 5.20 with 16k.
 
+**Against production tokenizers** (characters per token on the same validation sets, higher is
+better). The production tokenizers were trained on their own web data while ours are in-domain,
+so compare our two 160k rows with each other for the like-for-like result:
+
+| tokenizer | vocab | English | Russian | Chinese | Python | JavaScript | all 11 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Kimi K3 | 164k | 4.59 | 2.49 | 1.26 | 4.00 | 3.64 | 2.66 |
+| GPT-4o `o200k_base` | 200k | 4.63 | 3.35 | 1.14 | 4.01 | 3.66 | 2.75 |
+| GPT-4 `cl100k_base` | 100k | 4.59 | 2.02 | 0.77 | 4.03 | 3.71 | 2.21 |
+| standard BPE, ours | 164k | 4.50 | 4.07 | 1.58 | 3.53 | 3.20 | 3.06 |
+| **Combinatorial BPE, ours** | **164k** | **5.77** | **5.62** | **2.13** | **6.58** | **6.17** | **4.64** |
+
+At Kimi K3's exact budget (163,840 rows) Combinatorial BPE needs 34% fewer tokens than standard
+BPE trained on the same data (+52% characters per token: +28–38% on natural languages, +86–97% on
+code). The gap does not shrink at frontier vocabulary sizes.
+
 **Language modelling, single domain** (same GPT; bits-per-byte vs the best standard BPE):
 
 | setting | Δ bpb |
@@ -137,9 +163,14 @@ off at ~4.86 chars/token even with 262k entries, where Combinatorial BPE reaches
 ## Limitations and prior art
 
 - **Small scale.** 30–45M-parameter models (93M for the 128k-vocab baseline), at most 369M
-  training tokens, one seed per run. The advantage appears only after enough training; how it
-  behaves at real model scale is untested. The combinatorial model's chained output head adds
-  ~2.4M parameters (~6%); no parameter-matched baseline was run.
+  training tokens, one seed per run. In the learning-rate sweep both tokenizers preferred the
+  highest rate tried (4e-3), so slightly better settings may exist for both. With the older
+  recipe the advantage appeared only after enough training; with the modern recipe it leads from
+  the first checkpoint. How it behaves at real model scale is untested. The combinatorial
+  model's chained output head adds ~2.4M parameters (~6%); no parameter-matched baseline was run.
+- **Training speed.** The modern recipe runs ~34% slower per step than the GPT-2-style one on
+  this setup, because rotary embeddings and QK-norm are unfused without `torch.compile` (which
+  needs Triton, not installed here). The FLOP-based efficiency numbers are unaffected.
 - **Equal compute vs equal data.** The headline is at equal compute (shorter sequences let the
   model read more text). At equal data, the mixed run and English still win; single-domain
   JavaScript does not.
@@ -161,10 +192,12 @@ python scripts/download_data.py --code                      # Python, Java, JS, 
 python -m pytest
 python experiments/build_mix.py                             # 32k mixed tokenizers + LM/validation text
 python experiments/build_mix.py --lm_only --lm_scale 3 --lm_out mix_lm3x.txt   # needs the *_lm150 downloads
+bash experiments/run_modern.sh                          # headline: LR sweep + 22,500-step runs, modern recipe
 python experiments/lm.py results/tokenizers/mix_32768_bpe_gpt2.json --train_text data/mix_lm3x.txt \
     --val_text data/mix.test.txt --extra_val data/val_mix_*.txt --steps 22500 --eval_every 1500 --out results/lm_mix3x.json
 python experiments/lm.py results/tokenizers/mix_32768_comb.json --head chain --order 1,2,0,3 [same args]
 python experiments/bench_compression.py && python experiments/bench_code.py   # compression benchmarks
+python experiments/bench_frontier.py                     # vs Kimi K3 / GPT-4o / GPT-4 tokenizers (see its docstring)
 python experiments/report.py && python scripts/make_figures.py                # report + figures
 ```
 
@@ -190,7 +223,9 @@ experiments/bench_compression.py compression at equal budget, 10 corpora x 5 siz
 experiments/bench_code.py        source-code compression (+ camelCase ablation, GPT-4 reference)
 experiments/bench_han.py         Chinese Traditional variation
 experiments/bench_iso.py         English compression up to 256k vocab (token-count matching)
+experiments/bench_frontier.py    comparison with production tokenizers (Kimi K3, GPT-4o, GPT-4)
 experiments/report.py            results/REPORT.md and plots
+native/bpe_train/                optional Rust BPE merge loop (identical output to the Python trainer)
 ```
 
 </details>

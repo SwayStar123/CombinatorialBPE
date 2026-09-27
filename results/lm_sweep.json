@@ -1,0 +1,509 @@
+[
+ {
+  "tokenizer": "mix_32768_bpe_gpt2.json",
+  "tag": "modern_muon_lr1e-3",
+  "sizes": [
+   32768
+  ],
+  "params": 42083840,
+  "emb_params": 16777216,
+  "bytes_per_token": 3.6065561817349456,
+  "curve": [
+   {
+    "step": 0,
+    "tokens": 0,
+    "bytes": 0.0,
+    "val_bpb": 4.133146816006312,
+    "val_bpb_parts": [
+     4.133146816006312
+    ]
+   },
+   {
+    "step": 1000,
+    "tokens": 16384000,
+    "bytes": 59089816.48154535,
+    "val_bpb": 1.664923386195363,
+    "val_bpb_parts": [
+     1.664923386195363
+    ]
+   },
+   {
+    "step": 2000,
+    "tokens": 32768000,
+    "bytes": 118179632.9630907,
+    "val_bpb": 1.4935127648670534,
+    "val_bpb_parts": [
+     1.4935127648670534
+    ]
+   },
+   {
+    "step": 3000,
+    "tokens": 49152000,
+    "bytes": 177269449.44463605,
+    "val_bpb": 1.4422874356091395,
+    "val_bpb_parts": [
+     1.4422874356091395
+    ]
+   }
+  ],
+  "train_s": 592.1931800842285,
+  "final_by_source": {},
+  "args": {
+   "tokenizers": [
+    "results/tokenizers/mix_32768_bpe_gpt2.json"
+   ],
+   "train_text": "data/mix_lm3x.txt",
+   "val_text": "data/mix.test.txt",
+   "val_chars": 2000000,
+   "steps": 3000,
+   "bs": 32,
+   "accum": 1,
+   "ctx": 512,
+   "d": 512,
+   "layers": 8,
+   "heads": 8,
+   "lr": 0.001,
+   "arch": "modern",
+   "opt": "muon",
+   "warmup": 200,
+   "eval_every": 1000,
+   "seed": 0,
+   "head": "chain",
+   "head_hidden": 1.0,
+   "order": "1,2,0,3",
+   "tag": "modern_muon_lr1e-3",
+   "out": "results/lm_sweep.json",
+   "extra_val": []
+  }
+ },
+ {
+  "tokenizer": "mix_32768_comb.json",
+  "tag": "modern_muon_lr1e-3",
+  "sizes": [
+   4,
+   777,
+   31427,
+   560
+  ],
+  "params": 44452352,
+  "emb_params": 16777216,
+  "bytes_per_token": 5.228246763969819,
+  "curve": [
+   {
+    "step": 0,
+    "tokens": 0,
+    "bytes": 0.0,
+    "val_bpb": 6.387003287964177,
+    "val_bpb_parts": [
+     0.26554498248194885,
+     1.6881419640614135,
+     2.854136899496063,
+     1.5791794399382908
+    ]
+   },
+   {
+    "step": 1000,
+    "tokens": 16384000,
+    "bytes": 85659594.98088153,
+    "val_bpb": 1.6172724499462687,
+    "val_bpb_parts": [
+     0.028931569975542186,
+     0.08163949510873142,
+     1.358873192510174,
+     0.14782819321507817
+    ]
+   },
+   {
+    "step": 2000,
+    "tokens": 32768000,
+    "bytes": 171319189.96176305,
+    "val_bpb": 1.445478833669834,
+    "val_bpb_parts": [
+     0.021937448290232097,
+     0.07043824385031208,
+     1.226771664885677,
+     0.12633147997830735
+    ]
+   },
+   {
+    "step": 3000,
+    "tokens": 49152000,
+    "bytes": 256978784.94264457,
+    "val_bpb": 1.3979310516878658,
+    "val_bpb_parts": [
+     0.020551304622730214,
+     0.06747623337805687,
+     1.1888401333378613,
+     0.1210633817847464
+    ]
+   }
+  ],
+  "train_s": 653.9967865943909,
+  "final_by_source": {},
+  "args": {
+   "tokenizers": [
+    "results/tokenizers/mix_32768_comb.json"
+   ],
+   "train_text": "data/mix_lm3x.txt",
+   "val_text": "data/mix.test.txt",
+   "val_chars": 2000000,
+   "steps": 3000,
+   "bs": 32,
+   "accum": 1,
+   "ctx": 512,
+   "d": 512,
+   "layers": 8,
+   "heads": 8,
+   "lr": 0.001,
+   "arch": "modern",
+   "opt": "muon",
+   "warmup": 200,
+   "eval_every": 1000,
+   "seed": 0,
+   "head": "chain",
+   "head_hidden": 1.0,
+   "order": "1,2,0,3",
+   "tag": "modern_muon_lr1e-3",
+   "out": "results/lm_sweep.json",
+   "extra_val": []
+  }
+ },
+ {
+  "tokenizer": "mix_32768_bpe_gpt2.json",
+  "tag": "modern_muon_lr2e-3",
+  "sizes": [
+   32768
+  ],
+  "params": 42083840,
+  "emb_params": 16777216,
+  "bytes_per_token": 3.6065561817349456,
+  "curve": [
+   {
+    "step": 0,
+    "tokens": 0,
+    "bytes": 0.0,
+    "val_bpb": 4.133146816006312,
+    "val_bpb_parts": [
+     4.133146816006312
+    ]
+   },
+   {
+    "step": 1000,
+    "tokens": 16384000,
+    "bytes": 59089816.48154535,
+    "val_bpb": 1.655494369224743,
+    "val_bpb_parts": [
+     1.655494369224743
+    ]
+   },
+   {
+    "step": 2000,
+    "tokens": 32768000,
+    "bytes": 118179632.9630907,
+    "val_bpb": 1.4768258176247022,
+    "val_bpb_parts": [
+     1.4768258176247022
+    ]
+   },
+   {
+    "step": 3000,
+    "tokens": 49152000,
+    "bytes": 177269449.44463605,
+    "val_bpb": 1.419057441070969,
+    "val_bpb_parts": [
+     1.419057441070969
+    ]
+   }
+  ],
+  "train_s": 583.1322474479675,
+  "final_by_source": {},
+  "args": {
+   "tokenizers": [
+    "results/tokenizers/mix_32768_bpe_gpt2.json"
+   ],
+   "train_text": "data/mix_lm3x.txt",
+   "val_text": "data/mix.test.txt",
+   "val_chars": 2000000,
+   "steps": 3000,
+   "bs": 32,
+   "accum": 1,
+   "ctx": 512,
+   "d": 512,
+   "layers": 8,
+   "heads": 8,
+   "lr": 0.002,
+   "arch": "modern",
+   "opt": "muon",
+   "warmup": 200,
+   "eval_every": 1000,
+   "seed": 0,
+   "head": "chain",
+   "head_hidden": 1.0,
+   "order": "1,2,0,3",
+   "tag": "modern_muon_lr2e-3",
+   "out": "results/lm_sweep.json",
+   "extra_val": []
+  }
+ },
+ {
+  "tokenizer": "mix_32768_comb.json",
+  "tag": "modern_muon_lr2e-3",
+  "sizes": [
+   4,
+   777,
+   31427,
+   560
+  ],
+  "params": 44452352,
+  "emb_params": 16777216,
+  "bytes_per_token": 5.228246763969819,
+  "curve": [
+   {
+    "step": 0,
+    "tokens": 0,
+    "bytes": 0.0,
+    "val_bpb": 6.387003287964177,
+    "val_bpb_parts": [
+     0.26554498248194885,
+     1.6881419640614135,
+     2.854136899496063,
+     1.5791794399382908
+    ]
+   },
+   {
+    "step": 1000,
+    "tokens": 16384000,
+    "bytes": 85659594.98088153,
+    "val_bpb": 1.5946354098648305,
+    "val_bpb_parts": [
+     0.025305315149009765,
+     0.08175856397819105,
+     1.3457634888472176,
+     0.14180804370616207
+    ]
+   },
+   {
+    "step": 2000,
+    "tokens": 32768000,
+    "bytes": 171319189.96176305,
+    "val_bpb": 1.4255939232318542,
+    "val_bpb_parts": [
+     0.02044194256381025,
+     0.07002246640203133,
+     1.2129430295277486,
+     0.12218648566699293
+    ]
+   },
+   {
+    "step": 3000,
+    "tokens": 49152000,
+    "bytes": 256978784.94264457,
+    "val_bpb": 1.3727285293866487,
+    "val_bpb_parts": [
+     0.01910319475095616,
+     0.06656755357539224,
+     1.1703039857950832,
+     0.11675380020105981
+    ]
+   }
+  ],
+  "train_s": 606.5981478691101,
+  "final_by_source": {},
+  "args": {
+   "tokenizers": [
+    "results/tokenizers/mix_32768_comb.json"
+   ],
+   "train_text": "data/mix_lm3x.txt",
+   "val_text": "data/mix.test.txt",
+   "val_chars": 2000000,
+   "steps": 3000,
+   "bs": 32,
+   "accum": 1,
+   "ctx": 512,
+   "d": 512,
+   "layers": 8,
+   "heads": 8,
+   "lr": 0.002,
+   "arch": "modern",
+   "opt": "muon",
+   "warmup": 200,
+   "eval_every": 1000,
+   "seed": 0,
+   "head": "chain",
+   "head_hidden": 1.0,
+   "order": "1,2,0,3",
+   "tag": "modern_muon_lr2e-3",
+   "out": "results/lm_sweep.json",
+   "extra_val": []
+  }
+ },
+ {
+  "tokenizer": "mix_32768_bpe_gpt2.json",
+  "tag": "modern_muon_lr4e-3",
+  "sizes": [
+   32768
+  ],
+  "params": 42083840,
+  "emb_params": 16777216,
+  "bytes_per_token": 3.6065561817349456,
+  "curve": [
+   {
+    "step": 0,
+    "tokens": 0,
+    "bytes": 0.0,
+    "val_bpb": 4.133146816006312,
+    "val_bpb_parts": [
+     4.133146816006312
+    ]
+   },
+   {
+    "step": 1000,
+    "tokens": 16384000,
+    "bytes": 59089816.48154535,
+    "val_bpb": 1.6473400838685064,
+    "val_bpb_parts": [
+     1.6473400838685064
+    ]
+   },
+   {
+    "step": 2000,
+    "tokens": 32768000,
+    "bytes": 118179632.9630907,
+    "val_bpb": 1.4692885870027614,
+    "val_bpb_parts": [
+     1.4692885870027614
+    ]
+   },
+   {
+    "step": 3000,
+    "tokens": 49152000,
+    "bytes": 177269449.44463605,
+    "val_bpb": 1.4079139411316397,
+    "val_bpb_parts": [
+     1.4079139411316397
+    ]
+   }
+  ],
+  "train_s": 525.4088885784149,
+  "final_by_source": {},
+  "args": {
+   "tokenizers": [
+    "results/tokenizers/mix_32768_bpe_gpt2.json"
+   ],
+   "train_text": "data/mix_lm3x.txt",
+   "val_text": "data/mix.test.txt",
+   "val_chars": 2000000,
+   "steps": 3000,
+   "bs": 32,
+   "accum": 1,
+   "ctx": 512,
+   "d": 512,
+   "layers": 8,
+   "heads": 8,
+   "lr": 0.004,
+   "arch": "modern",
+   "opt": "muon",
+   "warmup": 200,
+   "eval_every": 1000,
+   "seed": 0,
+   "head": "chain",
+   "head_hidden": 1.0,
+   "order": "1,2,0,3",
+   "tag": "modern_muon_lr4e-3",
+   "out": "results/lm_sweep.json",
+   "extra_val": []
+  }
+ },
+ {
+  "tokenizer": "mix_32768_comb.json",
+  "tag": "modern_muon_lr4e-3",
+  "sizes": [
+   4,
+   777,
+   31427,
+   560
+  ],
+  "params": 44452352,
+  "emb_params": 16777216,
+  "bytes_per_token": 5.228246763969819,
+  "curve": [
+   {
+    "step": 0,
+    "tokens": 0,
+    "bytes": 0.0,
+    "val_bpb": 6.387003287964177,
+    "val_bpb_parts": [
+     0.26554498248194885,
+     1.6881419640614135,
+     2.854136899496063,
+     1.5791794399382908
+    ]
+   },
+   {
+    "step": 1000,
+    "tokens": 16384000,
+    "bytes": 85659594.98088153,
+    "val_bpb": 1.5911745400670032,
+    "val_bpb_parts": [
+     0.023500015949277274,
+     0.08305920475489843,
+     1.3440027301172557,
+     0.14061259128295575
+    ]
+   },
+   {
+    "step": 2000,
+    "tokens": 32768000,
+    "bytes": 171319189.96176305,
+    "val_bpb": 1.4200730670593043,
+    "val_bpb_parts": [
+     0.019661905527182118,
+     0.06992997118042027,
+     1.2095463462731375,
+     0.12093484673962719
+    ]
+   },
+   {
+    "step": 3000,
+    "tokens": 49152000,
+    "bytes": 256978784.94264457,
+    "val_bpb": 1.3642702300558416,
+    "val_bpb_parts": [
+     0.01830820626284542,
+     0.06617866092388777,
+     1.164808868452187,
+     0.1149744888210266
+    ]
+   }
+  ],
+  "train_s": 592.6970975399017,
+  "final_by_source": {},
+  "args": {
+   "tokenizers": [
+    "results/tokenizers/mix_32768_comb.json"
+   ],
+   "train_text": "data/mix_lm3x.txt",
+   "val_text": "data/mix.test.txt",
+   "val_chars": 2000000,
+   "steps": 3000,
+   "bs": 32,
+   "accum": 1,
+   "ctx": 512,
+   "d": 512,
+   "layers": 8,
+   "heads": 8,
+   "lr": 0.004,
+   "arch": "modern",
+   "opt": "muon",
+   "warmup": 200,
+   "eval_every": 1000,
+   "seed": 0,
+   "head": "chain",
+   "head_hidden": 1.0,
+   "order": "1,2,0,3",
+   "tag": "modern_muon_lr4e-3",
+   "out": "results/lm_sweep.json",
+   "extra_val": []
+  }
+ }
+]

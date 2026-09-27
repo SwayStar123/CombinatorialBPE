@@ -8,9 +8,49 @@ with corpus size.
 from __future__ import annotations
 
 import heapq
+import os
+import struct
+import subprocess
+import sys
+import tempfile
+from array import array
 from collections import Counter, defaultdict
 
 N_BYTES = 256
+_NATIVE_DIR = os.path.join(os.path.dirname(__file__), "..", "native", "bpe_train", "target", "release")
+
+
+def native_trainer():
+    """Path of the compiled Rust merge loop (native/bpe_train), or None to use the Python loop.
+    Build it with `cargo build --release` in native/bpe_train; set CBPE_NATIVE=0 to disable."""
+    if os.environ.get("CBPE_NATIVE", "1") == "0":
+        return None
+    for name in ("bpe_train.exe", "bpe_train"):
+        path = os.path.join(_NATIVE_DIR, name)
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def _train_native(binary, words, freqs, n_symbols, n_merges):
+    """Run the Rust merge loop; returns [(a, b, count)] in merge order."""
+    assert sys.byteorder == "little" and array("I").itemsize == 4
+    lens = array("I", map(len, words))
+    ids = array("I")
+    for w in words:
+        ids.extend(0xFFFFFFFF if i < 0 else i for i in w)
+    with tempfile.TemporaryDirectory() as tmp:
+        inp, out = os.path.join(tmp, "in.bin"), os.path.join(tmp, "out.bin")
+        with open(inp, "wb") as f:
+            f.write(struct.pack("<IIQQ", n_symbols, n_merges, len(words), len(ids)))
+            array("q", freqs).tofile(f)
+            lens.tofile(f)
+            ids.tofile(f)
+        subprocess.run([binary, inp, out], check=True)
+        with open(out, "rb") as f:
+            data = f.read()
+    n = struct.unpack_from("<I", data)[0]
+    return list(struct.iter_unpack("<IIq", data[4:4 + 16 * n]))
 
 
 class CharBPE:
@@ -109,6 +149,15 @@ class CharBPE:
             if len(ids) > 1:
                 words.append(ids)
                 freqs.append(c)
+
+        binary = native_trainer()
+        if binary is not None:  # same algorithm and tie-breaking, ~100x faster
+            merges, counts = [], []
+            for a, b, c in _train_native(binary, words, freqs, len(alphabet), n_merges):
+                merges.append((id2sym[a], id2sym[b]))
+                id2sym.append(id2sym[a] + id2sym[b])
+                counts.append(c)
+            return CharBPE(alphabet, merges, counts)
 
         pair_counts: dict[tuple[int, int], int] = defaultdict(int)
         where: dict[tuple[int, int], set[int]] = defaultdict(set)
