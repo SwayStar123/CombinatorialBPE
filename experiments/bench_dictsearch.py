@@ -58,8 +58,7 @@ PARAMS = dict(expand_permille=250, min_freq=20, max_len=20, em_iters=1, max_roun
               min_gain_ppm=500, rare_permille=0, partner_n0=0,
               sample_t=0, fine_rounds=0, coarse_gain_ppm=0,
               sig_k=0, sig_share_permille=50, swap_share_permille=0, case_cores=0, mark_rule=0, sig_soft=0, swap_self_permille=0,
-              case_affixes=0, code_len=0, code_w_permille=0, code_beta_permille=0, prune_reuse=0, prune_tail_ppm=0,
-              be_permille=0, be_order=0)
+              case_affixes=0, code_len=0, code_w_permille=0, code_beta_permille=0, prune_reuse=0, prune_tail_ppm=0)
 # min_gain_ppm: early stop (lossy; stop once a round gains < 500 ppm dev chars/token, about half the
 # rounds of max_rounds 12 at 32k; --set=min_gain_ppm:0 = off). sample_t / fine_rounds: coarse-to-fine
 # (lossy), rounds on a frequency-weighted sample of the segments, then fine_rounds on all of them;
@@ -77,13 +76,6 @@ PARAMS = dict(expand_permille=250, min_freq=20, max_len=20, em_iters=1, max_roun
 # prune_reuse, prune_tail_ppm (lossy speed-ups of pruning, see the header of main.rs; 0 = exact): prune
 # passes after the first re-parse only the segments whose tokens used a row dropped by the last pass;
 # pruning stops once a pass would drop fewer than prune_tail_ppm ppm of the rows (within budget).
-# be_permille, be_order (0 = off): branching-entropy boundary cost, a tie-break only. Every boundary a
-# parse places (between tokens and between a token's prefix, core and suffix) at a position where the
-# training text's branching entropy (of the next char given the be_order (0 = 1) chars before, and of
-# the previous char given the chars after) is low pays be_permille / 1000 x (1 - its percentile among
-# positions of the same script) bits of secondary cost; the model file then ends with a "BENT" section
-# (see the header of main.rs). It only decides between parses of equal primary cost: with
-# lambda_permille > 0 (affix bits in the primary cost) such ties are rare and it changes little.
 DEV_CHARS = 200_000
 
 

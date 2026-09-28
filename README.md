@@ -215,9 +215,20 @@ FineWeb-Edu, FineWeb-2, github-code-clean), on 4M held-out characters per source
   words, and a few single-token ties; `experiments/worst_cases.py` prints them per source.
 
 Not yet done: a language-model comparison with this tokenizer (the headline above uses the
-restricted 32k one). A Unigram-style code-length objective (`code_len`, `code_w_permille`) is
-implemented but off by default: it did not improve segmentation at 64k (conditioned on the core it
-fragmented common words; unconditioned it was within noise).
+restricted 32k one).
+
+Tried and not adopted (64k, 80M characters per source):
+- **Unigram-style code length** (`code_len`, `code_w_permille`; still in the code, off by default).
+  Conditioned on the core, it fragmented common words (`u:nd`, `i:s`). Unconditioned, it was within
+  noise on every segmentation metric.
+- **Unchunked training** (whole paragraphs, tokens may span spaces). It gives about 2× the
+  characters per token on space-separated languages (English 5.9 → 11.8), but words are cut by a
+  token boundary far more often (English 2.5% → 13.5%), gold boundary precision drops everywhere,
+  and Chinese and Japanese get worse. Such models are encoded by paragraph
+  (`"segmentation": "paragraphs"` in their json).
+- **Branching-entropy boundary cost** (a tie-break from the training text's next/previous-character
+  entropy). It had no effect, because primary costs almost never tie; the code is in the history
+  (commit dc64fb5).
 
 ## Limitations and prior art
 
