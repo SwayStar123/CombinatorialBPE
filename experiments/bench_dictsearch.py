@@ -41,6 +41,8 @@ from cbpe.tokenizers import F_UP, HAN_TO_TRAD, fold_char  # noqa: E402
 VOCAB = 32768
 NONE = 0xFFFFFFFF
 NONE_BASE = 0xFFFFFFF0
+CASE_MAGIC = int.from_bytes(b"CASE", "little")
+CAFX_MAGIC = int.from_bytes(b"CAFX", "little")
 SEGMENT = regex.compile(r"(?=\n\n)")
 CHUNK = regex.compile(r"\s*\S+|\s+")  # --hybrid segments: leading whitespace + a non-space run
 BIN_DIR = os.path.join(ROOT, "native", "dict_search", "target", "release")
@@ -53,7 +55,27 @@ PARAMS = dict(expand_permille=250, min_freq=20, max_len=20, em_iters=1, max_roun
               h0_millibits=4000, mu2_permille=0, tau_millibits=0,
               alnum_only=0, lamc_permille=0, nu_permille=0, frag_t_permille=500, glue_h0_millibits=0,
               price_permille=0, prod_k=0, conc_permille=0, core_price_permille=-1,
-              min_gain_ppm=0, rare_permille=0, partner_n0=0)  # min_gain_ppm > 0: early stop (lossy), see the header of main.rs
+              min_gain_ppm=500, rare_permille=0, partner_n0=0,
+              sample_t=0, fine_rounds=0, coarse_gain_ppm=0,
+              sig_k=0, sig_share_permille=50, swap_share_permille=0, case_cores=0, mark_rule=0, sig_soft=0, swap_self_permille=0,
+              case_affixes=0, code_len=0, code_w_permille=0, code_beta_permille=0, prune_reuse=0, prune_tail_ppm=0)
+# min_gain_ppm: early stop (lossy; stop once a round gains < 500 ppm dev chars/token, about half the
+# rounds of max_rounds 12 at 32k; --set=min_gain_ppm:0 = off). sample_t / fine_rounds: coarse-to-fine
+# (lossy), rounds on a frequency-weighted sample of the segments, then fine_rounds on all of them;
+# the default for --hybrid below. case_cores: cores keep their most frequent spelling (YouTube,
+# iPhone) and 5 variations relative to it (+ lower); see the header of main.rs. Off = the old model.
+# case_affixes (needs case_cores): prefixes and suffixes get canonical spellings too and the variation
+# applies to the whole token (' Ver' / ' ver', 'S' / 's' are one row); model files start with "CAFX".
+# code_len: the tie-break (secondary cost) becomes the unigram code length of the token, core first and
+# the affixes and variation given the core (backed off to their marginals, Witten-Bell unless
+# code_beta_permille > 0); code_w_permille (with code_len): w = code_w / 1000 tokens per bit also in
+# the primary cost (tokens + w x bits), so pruning, re-scoring and round scores weigh bits too.
+# Off (0) = the old trainer; model files then end with a "CLEN" section (see the header of main.rs).
+# code_w_permille without code_len: w x the token's unconditional bits (the secondary cost) in the primary
+# cost, on the fast 3-state DP (needs mu2 = lamc = 0); the model then ends with a short "CLEN" section.
+# prune_reuse, prune_tail_ppm (lossy speed-ups of pruning, see the header of main.rs; 0 = exact): prune
+# passes after the first re-parse only the segments whose tokens used a row dropped by the last pass;
+# pruning stops once a pass would drop fewer than prune_tail_ppm ppm of the rows (within budget).
 DEV_CHARS = 200_000
 
 
@@ -71,16 +93,24 @@ LETTER, DIGIT = regex.compile(r"[\p{L}\p{M}]"), regex.compile(r"\p{N}")
 
 
 SCRIPTS = [regex.compile(p) for p in (r"\p{Latin}", r"\p{Cyrillic}", r"\p{Greek}", r"\p{Han}",
-                                       r"[\p{Hiragana}\p{Katakana}]", r"\p{Hangul}", r"\p{N}")]
+                                       r"[\p{Hiragana}\p{Katakana}]", r"\p{Hangul}", r"\p{N}",
+                                       r"\p{Devanagari}")]
 
 
 def script_of(c):
     """script group: 0 = other (punctuation, space, symbols, other scripts), then Latin, Cyrillic,
-    Greek, Han, kana, Hangul, digits"""
+    Greek, Han, kana, Hangul, digits, Devanagari"""
     return next((i + 1 for i, p in enumerate(SCRIPTS) if p.match(c)), 0)
 
 
+MARK = regex.compile(r"\p{M}")
+
+
 def char_class(c):
+    """0 other, 1 letter or mark, 2 digit; 3 combining mark when mark_rule is on (the trainer then
+    never starts a token, core or prefix at one)"""
+    if PARAMS.get("mark_rule") and MARK.match(c):
+        return 3
     return 1 if LETTER.match(c) else 2 if DIGIT.match(c) else 0
 
 
@@ -167,7 +197,13 @@ class DModel:
             return out
 
         n = u32s(1)[0]
-        _, _, self.upper_of, self.trad_of = [u32s(n) for _ in range(4)]
+        # case_cores model: canonical core spellings, 5 variations; case_affixes ("CAFX"): canonical
+        # affix spellings too, the variation applies to the whole token
+        self.case_affixes = n == CAFX_MAGIC
+        self.case = self.case_affixes or n == CASE_MAGIC
+        if self.case:
+            n = u32s(1)[0]
+        self.fold, _, self.upper_of, self.trad_of = [u32s(n) for _ in range(4)]
         self.tables = [[u32s(u32s(1)[0]) for _ in range(u32s(1)[0])] for _ in range(3)]
         self.cores, self.prefixes, self.suffixes = (["".join(alpha[c] for c in s) for s in t] for t in self.tables)
         self.costs = []
@@ -176,16 +212,19 @@ class DModel:
             pos += 8 * len(t)
 
     def written(self, core_id, v):
-        """a core row as written with variation v (1 Capitalised, 2 UPPER, 3 Traditional)"""
-        out = []
-        for i, c in enumerate(self.tables[0][core_id]):
-            t = NONE
-            if (v == 1 and i == 0) or v == 2:
-                t = self.upper_of[c]
-            elif v == 3:
-                t = self.trad_of[c]
-            out.append(self.alpha[c if t == NONE else t])
-        return "".join(out)
+        """a core row as written with variation v (1 Capitalised, 2 UPPER, 3 Traditional, 4 lower)"""
+        return self.written_parts(v, 0, core_id, 0)[1]
+
+    def written_parts(self, v, p, c, s):
+        """(prefix, core, suffix) of a token as written (case_affixes: v applies to the whole token)"""
+        from cbpe.unrestricted import written_core, written_token
+        name = lambda syms: "".join(self.alpha[x] for x in syms)  # noqa: E731
+        if self.case_affixes:
+            ps, cs = self.tables[1][p], self.tables[0][c]
+            w = written_token([ps, cs, self.tables[2][s]], v, self.fold, self.upper_of, self.trad_of)
+            return name(w[:len(ps)]), name(w[len(ps):len(ps) + len(cs)]), name(w[len(ps) + len(cs):])
+        core = written_core(self.tables[0][c], v, self.case, self.fold, self.upper_of, self.trad_of)
+        return self.prefixes[p], name(core), self.suffixes[s]
 
     def token_count_and_check(self, chunk, units):
         """Tokens for one chunk (out-of-alphabet chars cost their UTF-8 bytes); asserts lossless."""
@@ -197,7 +236,7 @@ class DModel:
                 rebuilt.append(ch)
                 pos += 1
             else:
-                piece = self.prefixes[p] + self.written(c, v) + self.suffixes[s]
+                piece = "".join(self.written_parts(v, p, c, s))
                 n += 1
                 rebuilt.append(piece)
                 pos += len(piece)
@@ -212,8 +251,11 @@ class DModel:
                 pos += 1
                 continue
             core = self.cores[c]
-            tag = "" if v == 0 else "^" if v == 1 else "^^" if v == 2 else "T:"
-            parts.append(f"[{self.prefixes[p]!r}|{tag}{core}|{self.suffixes[s]!r}]")
+            tag = ["", "^", "^^", "T:", "_", "c:", "P:", "t:"][v]
+            if self.case_affixes:  # the variation applies to the whole token
+                parts.append(f"{tag}[{self.prefixes[p]!r}|{core}|{self.suffixes[s]!r}]")
+            else:
+                parts.append(f"[{self.prefixes[p]!r}|{tag}{core}|{self.suffixes[s]!r}]")
             pos += len(self.prefixes[p]) + len(core) + len(self.suffixes[s])
         return " ".join(parts)
 
@@ -256,20 +298,29 @@ def count_chunks(text, block=1 << 25):
     """Counter(CHUNK.findall(text)) in first-occurrence order, counted block by block (blocks end
     where a chunk ends; findall on a block is much faster than a Match object per chunk, and a
     list of all chunks at once would not fit in memory for large --tokdata)."""
+    # (on slices: the regex module fails on string positions past 2^31, i.e. --tokdata 320M x 11)
     counts, start = Counter(), 0
     while start < len(text):
-        m = CHUNK_CUT.search(text, start + block) if start + block < len(text) else None
-        end = m.end() if m else len(text)
-        counts.update(CHUNK.findall(text, start, end))
+        end = len(text)
+        if start + block < len(text):
+            look = text[start + block:start + block + (1 << 20)]
+            m = CHUNK_CUT.search(look)
+            end = start + block + m.end() if m else min(len(text), start + block + len(look))
+        counts.update(CHUNK.findall(text[start:end]))
         start = end
     return counts
 
 
+CURATED = os.environ.get("CBPE_DATA") == "curated"
+
+
 def dev_text():
+    """DEV_CHARS per source after the tokenizer training text (curated data: after the validation
+    slice of the test file, since the tokenizer training file may be used in full)"""
     parts = []
     for prefix, _, _ in SOURCES.values():
-        path = os.path.join(DATA, f"{prefix}.train.txt")
-        start = len(docs_prefix(path, TOK_CHARS))
+        path = os.path.join(DATA, f"{prefix}.test.txt" if CURATED else f"{prefix}.train.txt")
+        start = len(docs_prefix(path, 200_000 if CURATED else TOK_CHARS))
         with open(path, encoding="utf-8") as f:
             t = f.read(start + DEV_CHARS + 50_000)[start:]
         cut = t.rfind("\n\n", 0, DEV_CHARS)
@@ -284,7 +335,25 @@ def main(out_key="dict_search"):
         build_mix.TOK_CHARS = 2_000_000
         PARAMS.update(max_rounds=12, threads=22)
     if TOKDATA:
-        text = "\n\n".join(docs_prefix(os.path.join(DATA, LM_FILES_BIG[name]), TOKDATA) for name in SOURCES)
+        # curated data: the tokenizer training files (disjoint from the LM text); else the LM files
+        files = {n: f"{p}.train.txt" for n, (p, _, _) in SOURCES.items()} if CURATED else LM_FILES_BIG
+        text = "\n\n".join(docs_prefix(os.path.join(DATA, files[name]), TOKDATA) for name in SOURCES)
+        if CURATED and TOKDATA > 50_000_000:
+            # more than the 50M tokenizer file: the rest comes from the END of the LM file (its
+            # first 120M stay LM text; its first 4M are the held-out text of worst_cases.py)
+            # (at most 146M from it; beyond that the rest comes from <name>.more.txt, see
+            # scripts/download_curated.py --more, so the held-out 4M never enter)
+            from_lm = min(TOKDATA - 50_000_000, 146_000_000)
+            extra = []
+            for name in SOURCES:
+                with open(os.path.join(DATA, LM_FILES_BIG[name]), encoding="utf-8") as f:
+                    lm = f.read()
+                tail = lm[-from_lm:]
+                extra.append(tail[tail.find("\n\n") + 2:])
+                del lm
+                if TOKDATA - 50_000_000 > from_lm:
+                    extra.append(docs_prefix(os.path.join(DATA, f"{SOURCES[name][0]}.more.txt"), TOKDATA - 50_000_000 - from_lm))
+            text = text + "\n\n" + "\n\n".join(extra)
     else:
         text = tok_text()
     char_counts = count_chars(text)
@@ -350,7 +419,7 @@ def main(out_key="dict_search"):
     model = DModel(path, alpha)
     from cbpe.unrestricted import UnrestrictedBPE  # the cbpe tokenizer file, usable by cbpe.load / lm.py
     UnrestrictedBPE(path, alpha).save(path[:-4] + ".json")
-    r = {"params": PARAMS, "sizes": {"variation": 4, "prefix": len(model.prefixes),
+    r = {"params": PARAMS, "sizes": {"variation": 8 if model.case_affixes else 5 if model.case else 4, "prefix": len(model.prefixes),
                                      "core": 256 + len(model.cores), "suffix": len(model.suffixes)},
          "chars_per_token": {}}
     for name in SOURCES:
@@ -383,6 +452,10 @@ def main(out_key="dict_search"):
 if __name__ == "__main__":
     if HYBRID:
         PARAMS["protect_chars"] = 1
+        # coarse-to-fine: rounds on a sample (chunks seen f < 16 times kept with probability f / 16),
+        # then one round on all chunks (32k: 4.5x faster, dev chars/token +0.2%; results/speed_*.log).
+        # Off: --set=sample_t:0
+        PARAMS.update(sample_t=16, fine_rounds=1)
     for arg in sys.argv:  # --set=name:value overrides a PARAMS entry
         if arg.startswith("--set="):
             k, v = arg[6:].split(":")

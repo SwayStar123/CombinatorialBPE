@@ -8,6 +8,21 @@ exact minimum-cost DP in the Rust binary, so this class needs `native/dict_searc
 Token layout matches CombinatorialBPE: (variation, prefix, core, suffix), where core ids 0-255 are
 the UTF-8 byte-fallback rows and learned cores start at 256; prefix/suffix 0 is the empty string.
 
+Three model kinds (see the header of native/dict_search/src/main.rs). Old models store cores
+case/Han-folded with 4 variations (as-is, Capitalised, UPPER, Traditional). case_cores models
+(the file starts with "CASE") store every core's canonical spelling (YouTube, iPhone, the) with 5
+variations relative to it: as stored, Capitalised, UPPER, Traditional, lower. case_affixes models
+(the file starts with "CAFX") store canonical spellings for prefixes and suffixes too, and the
+variation applies to the whole token: prefix + core + suffix as stored, then rewritten as one
+string (Capitalised = its first char with an uppercase form made uppercase), with two more
+variations: camelCase (core and suffix each capitalised, get+name -> getName) and PascalCase (every
+part capitalised, get+name -> GetName), and Title (the first cased char of the token upper, all
+else lower: rat+Haus -> Rathaus). Variations are
+per-symbol maps from the model file (never str.upper / str.lower, which can change the length:
+ß -> SS), so decoding is exact. Models trained with code_len (the unigram code-length objective)
+end with a "CLEN" section of code length statistics that only the binary's encoder reads; the
+tables, and so loading and decoding here, are unchanged.
+
 The tokenizer file is a small JSON: {"type": "unrestricted", "model": <.bin next to it>,
 "alphabet": [chars]}, written by experiments/bench_dictsearch.py next to every trained model.
 """
@@ -26,10 +41,65 @@ CHUNK = regex.compile(r"\s*\S+|\s+")
 NONE = 0xFFFFFFFF
 NONE_BASE = 0xFFFFFFF0
 N_BYTES = 256
+CASE_MAGIC = int.from_bytes(b"CASE", "little")
+CAFX_MAGIC = int.from_bytes(b"CAFX", "little")
+VARIATIONS_CASE = ["as-is", "Capitalised", "UPPER", "Traditional", "lower"]
+
+
+def written_core(syms, v, case, fold, upper_of, trad_of):
+    """symbol ids of a core row written with variation v. Old models: syms are folded and v rewrites
+    them (1 first char upper, 2 all upper, 3 Traditional). case_cores: syms are the canonical
+    spelling and v is relative to it (1 first char upper, 2 all upper, 3 Traditional with the
+    capitals kept, 4 all folded). A char without the needed form is kept as it is."""
+    out = []
+    for i, c in enumerate(syms):
+        t = NONE
+        if not case:
+            if (v == 1 and i == 0) or v == 2:
+                t = upper_of[c]
+            elif v == 3:
+                t = trad_of[c]
+        elif (v == 1 and i == 0) or v == 2:
+            t = upper_of[fold[c]]
+        elif v == 3:
+            t = trad_of[c]  # NONE for capitals (trad_of is only set for Simplified Han)
+        elif v == 4:
+            t = fold[c]
+        out.append(c if t == NONE else t)
+    return out
+
+
+def written_token(parts, v, fold, upper_of, trad_of):
+    """case_affixes: symbol ids of a whole token (its parts' canonical spellings: prefix, core,
+    suffix) written with variation v: 0 as stored, 1 the first char with an uppercase form made
+    uppercase, 2 all upper, 3 Traditional with the capitals kept, 4 all folded, 5 camelCase (the
+    first cased char of the core and of the suffix each made uppercase), 6 PascalCase (that of
+    every part, the prefix too), 7 Title (the token's first cased char uppercase, all else folded,
+    whatever the canonical spellings)."""
+    out, first = [], v in (1, 7)
+    for k, syms in enumerate(parts):
+        if v == 6 or (v == 5 and k > 0):
+            first = True
+        for c in syms:
+            t = NONE
+            if v in (1, 5, 6, 7) and first and upper_of[fold[c]] != NONE:
+                t, first = upper_of[fold[c]], False
+            elif v == 7:
+                t = fold[c]
+            elif v == 2:
+                t = upper_of[fold[c]]
+            elif v == 3:
+                t = trad_of[c]  # NONE for capitals (trad_of is only set for Simplified Han)
+            elif v == 4:
+                t = fold[c]
+            out.append(c if t == NONE else t)
+    return out
 _BIN_DIR = os.path.join(os.path.dirname(__file__), "..", "native", "dict_search", "target", "release")
 
 
 def _binary():
+    if os.environ.get("DS_BIN"):  # another build (as in experiments/bench_dictsearch.py)
+        return os.environ["DS_BIN"]
     for name in ("dict_search.exe", "dict_search"):
         path = os.path.join(_BIN_DIR, name)
         if os.path.exists(path):
@@ -52,16 +122,20 @@ class UnrestrictedBPE:
             return out
 
         n = u32s(1)[0]
-        _, _, self.upper_of, self.trad_of = [u32s(n) for _ in range(4)]
+        self.case_affixes = n == CAFX_MAGIC
+        self.case = self.case_affixes or n == CASE_MAGIC
+        if self.case:
+            n = u32s(1)[0]
+        self.fold, _, self.upper_of, self.trad_of = [u32s(n) for _ in range(4)]
         tables = [[u32s(u32s(1)[0]) for _ in range(u32s(1)[0])] for _ in range(3)]
-        self.core_syms = tables[0]
+        self.core_syms, self.prefix_syms, self.suffix_syms = tables
         self.cores, self.prefixes, self.suffixes = (
             ["".join(self.alphabet[c] for c in s) for s in t] for t in tables)
 
     # ------------------------------------------------------------------ sizes
     @property
     def sizes(self):
-        return {"variation": 4, "prefix": len(self.prefixes), "core": N_BYTES + len(self.cores),
+        return {"variation": 8 if self.case_affixes else 5 if self.case else 4, "prefix": len(self.prefixes), "core": N_BYTES + len(self.cores),
                 "suffix": len(self.suffixes)}
 
     @property
@@ -70,15 +144,21 @@ class UnrestrictedBPE:
 
     # ----------------------------------------------------------------- encode
     def _written(self, c: int, v: int) -> str:
-        out = []
-        for i, ch in enumerate(self.core_syms[c]):
-            t = NONE
-            if (v == 1 and i == 0) or v == 2:
-                t = self.upper_of[ch]
-            elif v == 3:
-                t = self.trad_of[ch]
-            out.append(self.alphabet[ch if t == NONE else t])
-        return "".join(out)
+        """core row c written with variation v (as a core-only token)"""
+        if self.case_affixes:
+            return self._str(written_token([(), self.core_syms[c], ()], v, self.fold, self.upper_of, self.trad_of))
+        return self._str(written_core(self.core_syms[c], v, self.case, self.fold, self.upper_of, self.trad_of))
+
+    def _str(self, syms) -> str:
+        return "".join(self.alphabet[ch] for ch in syms)
+
+    def written_parts(self, v: int, p: int, c: int, s: int) -> tuple[str, str, str]:
+        """(prefix, core, suffix) text of a token with core row c (not a byte), as written"""
+        if self.case_affixes:
+            ps, cs = self.prefix_syms[p], self.core_syms[c]
+            w = written_token([ps, cs, self.suffix_syms[s]], v, self.fold, self.upper_of, self.trad_of)
+            return self._str(w[:len(ps)]), self._str(w[len(ps):len(ps) + len(cs)]), self._str(w[len(ps) + len(cs):])
+        return self.prefixes[p], self._written(c, v), self.suffixes[s]
 
     def _encode_chunks(self, chunks: list[str]) -> list[list[tuple[int, int, int, int]]]:
         lens = array("I", map(len, chunks))
@@ -122,7 +202,7 @@ class UnrestrictedBPE:
         v, p, c, s = tok
         if c < N_BYTES:
             return bytes([c])
-        return (self.prefixes[p] + self._written(c - N_BYTES, v) + self.suffixes[s]).encode("utf-8")
+        return "".join(self.written_parts(v, p, c - N_BYTES, s)).encode("utf-8")
 
     def decode(self, toks) -> str:
         return b"".join(self.token_bytes(t) for t in toks).decode("utf-8", errors="replace")

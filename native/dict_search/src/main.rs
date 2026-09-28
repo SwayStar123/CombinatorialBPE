@@ -3,7 +3,8 @@
 //! dictionary directly, re-parse from scratch after every change, never commit merges.)
 //!
 //! A token is (variation, prefix, core, suffix); all three parts are arbitrary strings. Cores are
-//! case/Han-folded and carry the variation; prefixes and suffixes match the original text exactly.
+//! case/Han-folded and carry the variation; prefixes and suffixes match the original text exactly
+//! (with case_affixes they are folded too and the variation applies to the whole token).
 //!
 //! ENCODER: exact minimum-token parse with three states per position,
 //!     B[i] between tokens --prefix--> P[j] --core,variation (1 token)--> C[k] --suffix--> B[l]
@@ -124,7 +125,8 @@
 //!     All scores are fixed statistics of the raw text except conc, which only removes rows.
 //!     u32 min_gain_ppm (after core_price_permille; 0 = off. Early stop, lossy: stop after a round
 //!     (>= 1) that improved the best dev chars/token by less than this many parts per million (a
-//!     rejected round improves nothing); the saved model is the best so far, as always)
+//!     rejected round improves nothing); the saved model is the best so far, as always.
+//!     bench_dictsearch.py default 500: 32k hybrid stops after round 6 of 12, dev chars/token -0.07%)
 //!     u32 rare_permille, u32 partner_n0 (read after min_gain_ppm; 0 = off):
 //!     RARITY COST (per use, fixed from the raw text): every use of an affix a also pays
 //!     rare x bits(a), bits(a) = -log2(count(a) / chars of a's script in the training text), the
@@ -139,6 +141,171 @@
 //!     rare ones (name pieces, chemical fragments), pays up to 1 + prod_k times its spelling and is
 //!     merged (swap proposals) or dropped; one used with many common cores pays about its spelling.
 //!     Recomputed every prune pass; it only decides which rows are kept, never enters the parse.
+//!     u32 sample_t, u32 fine_rounds, u32 coarse_gain_ppm (read after partner_n0; 0 = off.
+//!     COARSE-TO-FINE, lossy): the rounds first run on a frequency-weighted sample of the training
+//!     segments (sample_corpus: segments with count >= sample_t kept, rarer ones kept with
+//!     probability count / sample_t at weight sample_t, so every corpus sum keeps its expectation)
+//!     until max_rounds or a stop (2 rejections, or a gain below coarse_gain_ppm, or below
+//!     min_gain_ppm if that is 0); then the incumbent is re-estimated on the full corpus and refined
+//!     there by up to fine_rounds more rounds (2 rejections or min_gain_ppm stop them; a rejected
+//!     fine round is retried, not counted as "no gain"). A coarse phase run to convergence
+//!     (coarse_gain_ppm = 0) has settled at the current expansion, so the fine phase starts with a
+//!     doubled one, as after a rejection (the first fine round at the old size was mostly rejected
+//!     in tests, and the doubled one gained ~0.4% chars/token). Proposals and all raw-text
+//!     statistics always use the full text; the parse-bound phases (EM, prune losses, re-scoring,
+//!     refactor/swap proposals) scale with the sample. Whitespace chunks (--hybrid): 6.7M unique
+//!     segments, t = 16 keeps 0.8M (9% of their chars); 32k vocab 4.5x faster end to end at equal or
+//!     better dev chars/token (results/speed_*.log).
+//!     u32 sig_k, u32 sig_share_permille, u32 swap_share_permille (read after coarse_gain_ppm;
+//!     sig_k = 0 = off; swap_share 0 = the old 500): PARADIGM (SIGNATURE) PRICE for cores, after
+//!     Goldsmith's signatures. A core's signature on one side is the set of letter pieces its
+//!     affixes carry there (the letter run of a suffix's start / a prefix's end: s, s, and s. all
+//!     count as "s"; affixes without letters count as the empty piece), among pieces with at least
+//!     sig_share of the core's uses. A core whose signature includes a letter piece belongs to a
+//!     paradigm shared by S cores (those with the same signature, among cores with >= 20 uses) and
+//!     its price is multiplied by 1 + sig_k / S on that side: year {-, s} and पूर {ा, ी, े} are
+//!     shared by thousands of stems and pay about their spelling, while gre {at, en, y} or ris
+//!     {e, ing, k} are one-offs and pay up to 1 + sig_k times more, so their words are merged into
+//!     whole cores (swap proposals) and the one-off stem is dropped. Recomputed every prune pass
+//!     from the parse, but like the partner price it only decides which rows are kept.
+//!     swap_share_permille: a merge (core + affix piece) is proposed when it covers at least this
+//!     share of the core's uses (or half of the whole affix's) and frees more price than the merged
+//!     core costs; lower it with sig_k so that a one-off stem's merges are all proposed together.
+//!     u32 mark_rule (read after case_cores; 0 = off): NO TOKEN, CORE OR PREFIX STARTS WITH A
+//!     COMBINING MARK. alnum = 3 marks a combining mark (Unicode \p{M}: Devanagari vowel signs and
+//!     viramas, combining accents, ...); with the rule on, no prefix or core arc may start at a mark,
+//!     so a mark always stays in the token of the char before it: inside a core, or at the start of
+//!     a suffix (stem + agreement vowel, पूर:ा, stays possible; ह|ै, ज:ारी's core-less vowel, or a
+//!     core ियाँ does not). A mark with nothing to attach to (after a space) is written in bytes.
+//!     Cores and prefixes that start with a mark are never proposed. The model file then ends with
+//!     u32 MARK_MAGIC and u32 alnum[n_symbols], so encoding follows the same rule.
+//!     u32 sig_soft (read after mark_rule; 0 = off): SOFT SIGNATURE PRICE. Instead of the size S of
+//!     the core's exact signature, each letter piece p is weighed by N(p), the number of cores
+//!     taking it: the core's factor is 1 + sig_k x sum_p share(c, p) / N(p) per side (and an affix
+//!     pays by the average of that over its cores). The exact set of a stem with many productive
+//!     endings is nearly unique, so the hard price charged Erfolg ~680x its spelling; soft, a stem
+//!     pays only for its rare endings.
+//!     u32 swap_self_permille (read after sig_soft; 0 = off): SELF-PAYING MERGES. A swap proposal is
+//!     also made for core + whole affix when the merged core's saving on those uses (lambda x the
+//!     affix's bits + delta, per use) is above swap_self x its price: pruning would keep it, but a
+//!     merge that saves no token (Got:t, hi:m) is found by no other proposal.
+//!     u32 case_affixes (read after swap_self_permille; 0 = off, exactly the old trainer; needs
+//!     case_cores): CASE-PRESERVING AFFIXES, WHOLE-TOKEN VARIATION. Prefix and suffix rows are keyed
+//!     by their folded string too and store a canonical spelling like cores (canonical_masks: the
+//!     spelling that writes the most raw occurrences), so ' Ver' / ' ver', 'S' / 's' or 'Name' /
+//!     'name' are one row.
+//!     The variation then applies to the whole token: its text is V(prefix ++ core ++ suffix), the
+//!     three canonical spellings concatenated, with 0 as stored, 1 Capitalised = as stored with the
+//!     FIRST CHAR THAT HAS AN UPPERCASE FORM made uppercase (' '+un+happy -> ' Unhappy'; for a token
+//!     that starts with a cased char this is the old Capitalised; unlike it, a token starting with
+//!     an uncased char (_name, 1st, ' x') capitalises its first cased char instead of nothing),
+//!     2 UPPER, 3 Traditional (capitals kept), 4 lower, 5 camelCase = as stored with the first
+//!     char with an uppercase form of the core and of the suffix each made uppercase, the prefix as
+//!     stored (get + name + list -> getNameList), 6 PascalCase = the same for every part, prefix
+//!     included (get + name -> GetName, response + writer -> ResponseWriter); a part without a
+//!     cased char is unchanged; 7 Title = the token's first char with an uppercase form uppercase
+//!     and every other char folded, whatever the canonical spellings (rat + Haus -> Rathaus,
+//!     iPhone -> Iphone). A span no single variation writes is not matched (other parses /
+//!     bytes). The exact DP carries a variation state through the states after the prefix and
+//!     after the core (VS_*: the eight variations, Capitalised and Title each split into "first
+//!     cased char still to come" and "done"), so it stays exact.
+//!     u32 code_len, u32 code_w_permille, u32 code_beta_permille (read after case_affixes, in this
+//!     order; all 0 = off, exactly the old trainer and encoder): UNIGRAM CODE LENGTH (Unigram /
+//!     MinGram-style objective). code_len = 1: every token has a code length in bits, factored like
+//!     the LM's chained output head (core first, then the rest given the core):
+//!         bits(v, p, c, s) = -log2 p(c) - log2 p(s | c) - log2 p(p | c) - log2 p(v | c),
+//!     the empty affix being an ordinary outcome. p(c) = (n(c) + 1/2) / (N + n_byte + (|C| + 1) / 2)
+//!     (half-count smoothing over the live cores plus one BYTE pseudo-core); p(a), p(v) are the
+//!     half-count marginals the trainer already keeps (cost, vcost). The conditionals back off to
+//!     them: p(a | c) = (n(c, a) + beta(c) p(a)) / (n(c) + beta(c)), with beta(c) = code_beta
+//!     (code_beta_permille / 1000) if > 0, else WITTEN-BELL: beta(c) = the number of distinct
+//!     partners c has on that side (prefixes, suffixes or variations; 1 if none; pairs seen once
+//!     are counted in n(c) and beta(c) but not kept: they back off like unseen ones, which keeps
+//!     the model file small), so a core seen
+//!     with one ending is nearly deterministic, one seen with many backs off a lot, and an unseen
+//!     core (n(c) = 0: a new row, a candidate) gets exactly the marginals. A byte-fallback char of
+//!     b bytes is b tokens of 8 - log2 p(BYTE) bits each (n_byte = byte tokens in the parse) in the
+//!     primary cost (w x bits); its secondary cost stays the old 1000 per byte, so an alphabet
+//!     char's core still wins every tie against its bytes (with honest bits there, a rarely used
+//!     single-char core lost ties to its byte and the byte count fed on itself).
+//!     All counts are the hard-EM counts of the current parse's token types, re-estimated wherever
+//!     the costs are (update_codelen: every EM step, every prune pass, the coarse-to-fine switch).
+//!     With code_len the secondary (tie-break) cost of a token is its code length in bits (instead
+//!     of the independent -log2 q of its parts), so equal-count parses are decided by how likely the
+//!     core and its affixes given the core are (观光局|首度 over 观光:局:首|度). The primary terms
+//!     (tokens, delta, lambda, mu, usec, mu2, lamc) are unchanged. The conditionals need the prefix
+//!     until the core and the core until the suffix, so code_len always runs the pairwise DP
+//!     (parse_pair). Exact re-scoring then parses every sampled segment once and re-parses it with
+//!     a candidate only where the candidate's arcs, replayed against the plain parse's final
+//!     entries, would change a score (extra_pair_wins; exact up to better's 1e-9 ties: in tests
+//!     no skipped pair differed from its full re-parse). That re-parse resumes the plain parse's
+//!     pending state at the candidate's first arc (the DP is the same before it) and stops once
+//!     past its last arc the final entries of every position whose arcs reach further equal the
+//!     plain parse's (the rest is then the plain DP): the same result as the full re-parse, bit for
+//!     bit (exact_gains_pair).
+//!     code_w_permille (with code_len): w = code_w / 1000 tokens per bit also enters the PRIMARY
+//!     cost: tokens + w x bits (+ the other primary terms). Small w (1-20 permille) keeps token count
+//!     first but makes every loss, exact gain and round score weigh bits too (MinGram-like); large w
+//!     approaches pure Unigram. Row prices stay in tokens; since leave-one-out losses, exact gains
+//!     and the round score are all primary costs, a row that saves no token but many bits per use
+//!     (a whole-word core Gott vs Got:t) can now pay its price. Candidate rows not yet in the tables
+//!     (exact re-scoring) get the median marginal cost of their table and no pair counts (so their
+//!     conditionals are the marginals, as for any unseen row); refactoring and self-paying swap
+//!     proposals also count w x the affix bits given the core that absorbing the affix saves.
+//!     The model file then ends with the code length statistics (see MODEL), so encoding minimises
+//!     exactly the same (tokens + w x bits, bits).
+//!     code_w_permille WITHOUT code_len (UNCONDITIONAL BITS; needs mu2 = lamc = 0): w x the token's
+//!     unconditional code length, exactly the bits the secondary cost already adds up,
+//!         bits(v, p, c, s) = -log2 q(c) - log2 q(v) - log2 q(p) - log2 q(s)
+//!     (the half-count marginals cost / vcost, empty affixes included), also enters the PRIMARY
+//!     cost: tokens + w x bits (+ the other primary terms), everywhere primary costs are used
+//!     (the 3-state DP and its windowed / resumed re-scoring, extra rows in exact re-scoring,
+//!     leave-one-out losses, proposal values, refactoring and self-paying swap values (w x the
+//!     absorbed affix's bits beyond an empty affix's), round scores). No core-conditioned
+//!     statistics: parsing stays on the fast 3-state DP (the arcs carry w x the row's bits, the
+//!     core arc also w x the variation's). The cores' distribution then also has the BYTE
+//!     pseudo-core, as with code_len (p(c) = (n(c) + 1/2) / (N + n_byte + (|C| + 1) / 2)), and a
+//!     byte-fallback char of b bytes pays b x w x (8 - log2 p(BYTE)) in the primary cost (plus
+//!     what a token with empty affixes pays, as without code_w); the secondary cost is unchanged
+//!     (1000 per byte). The model file then ends with u32 CODE_MAGIC, u32 0, f64 w, f64 bits per
+//!     fallback byte, and encoding minimises the same (tokens + w x bits, bits). code_w = 0 is
+//!     exactly the old trainer and model file.
+//!     u32 prune_reuse, u32 prune_tail_ppm (read after code_beta_permille, in this order; 0 = off,
+//!     exactly the old trainer): LOSSY SPEED-UPS OF PRUNING, meant for the full-corpus fine round,
+//!     where one parse of the corpus takes minutes and pruning parsed it ~10-16 times.
+//!     prune_reuse = 1: a prune pass after the first re-uses the last pass's parse (the tokens of
+//!     every segment are kept, ~16 bytes per token plus the types map, i.e. about what one parse
+//!     holds while its statistics are built): only the segments whose tokens use a row the last
+//!     pass dropped are parsed again (they must change), and the statistics are updated by the
+//!     difference (reparse_dirty). Every other segment keeps a parse that was optimal under the last
+//!     pass's costs, not necessarily under the costs re-estimated since: that is the approximation.
+//!     Costs, prices, losses and drops are then computed as always from those statistics. The EM
+//!     step after pruning would re-estimate from that same parse (no row was dropped after it),
+//!     i.e. repeat the last pass's re-estimation, so its first iteration is skipped. The round's
+//!     final parse, its score, dev chars/token and everything after them are exact parses of the
+//!     pruned dictionary. (Fine round at 10M chars per source: the second pass parses ~11% of the
+//!     segments again, the sixth ~5%, the tenth < 1%.)
+//!     prune_tail_ppm = t > 0: pruning stops once the rows are within budget and a pass would drop
+//!     fewer than t ppm of them; those last few rows below their price stay (at 64k, t = 1000
+//!     skips passes that drop a few dozen rows each).
+//!     At 10M chars per source (64k, the bench_dictsearch best config) prune_reuse = 1 with
+//!     prune_tail_ppm = 1000 made the fine round ~2x faster; held-out chars/token over 4 runs was
+//!     -0.13% +- 0.12% against the exact trainer's -0.08% +- 0.13% over 4 runs with other thread
+//!     counts (float summation order alone), and 77-80% of sampled held-out chunks were segmented
+//!     as by the reference model, as for the exact runs (78-83%): within run-to-run noise.
+//!     u32 case_cores (read after swap_share_permille; 0 = off, exactly the old trainer):
+//!     CASE-PRESERVING CORES. A core row is still keyed by its folded string (one row per folded
+//!     form), but it also stores a CANONICAL SPELLING: its most frequent written form in the raw
+//!     text (the frequent-substring index plus single chars, counts summed over spellings that
+//!     differ only by Han folding; ties go to fewer / earlier capitals), with Han chars kept
+//!     folded. the / year stay lowercase, YouTube / iPhone / toUpperCase keep their capitals, so a
+//!     mixed-case word can be one core. Variations are relative to the canonical spelling:
+//!     0 as stored, 1 Capitalised (first char upper, the rest as stored), 2 UPPER, 3 Traditional
+//!     (the canonical spelling with Han chars Traditional), 4 lower. All are per-symbol maps
+//!     (upper_of / trad_of / fold), so a variation is used only where it rewrites the canonical
+//!     spelling into exactly the text (CaseAcc); when several do, the parse takes the cheapest
+//!     (-log2 q(v)), the lowest id on a tie. Canonical spellings are fixed statistics of the raw
+//!     text, not of the tokenizer's own parse.
 //!     then (at the very end of the input) u32 has_script, and if 1, u32 script[n_symbols] (script
 //!     group id per alphabet char; used by the rarity cost)
 //!     u32 has_init, then (if 1) three tables (cores, prefixes, suffixes) to start from instead of the
@@ -151,7 +318,26 @@
 //!     then (if present) f64 mu2, f64 tau, u32 n, n x (u32 prefix, u32 core, f32 excess PMI),
 //!     u32 n, n x (u32 core, u32 suffix, f32 excess PMI), then (if present) the lamc statistics,
 //!     then (if present) f64 nu and f64 glue score for every core row, then every prefix and
-//!     suffix row
+//!     suffix row.
+//!     case_cores models start with u32 CASE_MAGIC ("CASE") before n_symbols; the core table then
+//!     holds the canonical spellings (the trie key is their folded form) and there are 5
+//!     variation costs instead of 4. Everything else is as above.
+//!     case_affixes models start with u32 CAFX_MAGIC ("CAFX") instead of CASE_MAGIC: as case_cores,
+//!     and the prefix and suffix tables hold canonical spellings too; a token's text is its
+//!     variation applied to prefix ++ core ++ suffix (see case_affixes), and there are 8 variation
+//!     costs instead of 5.
+//!     code_w without code_len: the model ends (after the mark_rule section, if any) with u32
+//!     CODE_MAGIC ("CLEN"), u32 0, f64 w, f64 bits per fallback byte, and nothing else.
+//!     code_len models end (after the mark_rule section, if any) with u32 CODE_MAGIC ("CLEN"),
+//!     u32 code_len, f64 w, f64 bits per fallback byte, then per core row 3 x u16 backoff offsets
+//!     log2((n(c) + beta(c)) / beta(c)) (prefix, suffix, variation side), then three tables of the
+//!     pairs seen at least CL_MIN_PAIR (2) times in the parse, -log2 p(. | core): (prefix, core),
+//!     (core, suffix), (core, variation), each as u32 byte length, then per core row a LEB128
+//!     varint count and per pair (by increasing prefix / suffix / variation id) a varint id gap
+//!     (the first pair: the id; then id - previous id - 1) and u16 bits. Every u16 is in units of
+//!     1 / 1024 bit (CL_Q; training uses exactly these quantised values). Every other pair is
+//!     -log2 q(a) (the row cost above, or the variation cost) + the core's offset. (The core row
+//!     costs are -log2 p(c).) Older readers ignore the section.
 //! WORDS: u64 n, u64 n_ids, u32 lens[n], u32 ids[n_ids]
 //! OUTPUT: per segment u32 n_tokens, then n x (u32 variation, u32 prefix, u32 core, u32 suffix);
 //!     core = u32::MAX: one out-of-alphabet char (byte fallback)
@@ -296,6 +482,244 @@ fn variation(m: u8) -> Option<usize> {
     }
 }
 
+// case_cores: per-char classes relative to the folded char f (Symbols::cf). UP: the char is
+// upper_of[f]; TRAD: it is trad_of[f]; HS: it is f and the Traditional variation would change
+// it; HASU: f has an uppercase form; BAD: a folded char no per-symbol map gives back (none with
+// the fold rules of build_symbols; kept so such a char can never be matched lossily).
+const CF_UP: u8 = 1;
+const CF_TRAD: u8 = 2;
+const CF_HS: u8 = 4;
+const CF_HASU: u8 = 8;
+const CF_BAD: u8 = 16;
+const CASE_MAGIC: u32 = u32::from_le_bytes(*b"CASE");
+const CAFX_MAGIC: u32 = u32::from_le_bytes(*b"CAFX");
+const NVAR_CASE: usize = 5;
+const NVAR_MAX: usize = 8; // case_affixes: + 5 camelCase, 6 PascalCase, 7 Title
+
+// case_affixes: variation states of a token in progress (DP states 1 and 2 keep one score per
+// state). VS 0, 2, 3, 4, 5 (camelCase), 6 (PascalCase) = that variation; Capitalised and Title
+// are split into "the token's first char with an uppercase form still to come" (VS 1, 7) and
+// "done" (VS_CAP_DONE, VS_TITLE_DONE).
+// A part (prefix, core, suffix) is summarised by a transition mask (CaseAcc::tm) of the ways it
+// can be written: TM_AS (as stored), TM_CAP (its own first cased char made uppercase, the rest as
+// stored; as stored if it has none), TM_UP (UPPER), TM_TRAD, TM_LOW (lower), TM_TITLE (its first
+// cased char uppercase, every other char folded; folded if it has none), and TM_CAPS = it has a
+// char with an uppercase form (so it ends a pending state). What a state needs from a part:
+//   state          prefix (from the token start)   core, suffix
+//   0              TM_AS                           TM_AS
+//   1 Cap pending  TM_CAP (-> 8 if TM_CAPS)        TM_CAP (-> 8 if TM_CAPS)
+//   2 3 4          TM_UP / TM_TRAD / TM_LOW        the same
+//   5 camel        TM_AS                           TM_CAP
+//   6 Pascal       TM_CAP                          TM_CAP
+//   7 Title pend.  TM_TITLE (-> 9 if TM_CAPS)      TM_TITLE (-> 9 if TM_CAPS)
+//   8 Cap done     -                               TM_AS
+//   9 Title done   -                               TM_LOW
+// (vs_start: the states after a prefix; vs_allow: the states a core or suffix can follow.)
+const NVS: usize = 10;
+const VS_CAP_PENDING: usize = 1;
+const VS_TITLE_PENDING: usize = 7;
+const VS_CAP_DONE: usize = 8;
+const VS_TITLE_DONE: usize = 9;
+const TM_AS: u8 = 1;
+const TM_CAP: u8 = 2;
+const TM_LOW: u8 = 16;
+const TM_TITLE: u8 = 32;
+const TM_ALL: u8 = 63;
+const TM_CAPS: u8 = 64;
+const TM_EMPTY: u8 = TM_ALL; // an empty affix: written every way, no change
+
+/// the variation of a variation state
+#[inline(always)]
+fn vs_var(vs: usize) -> usize {
+    match vs {
+        VS_CAP_DONE => 1,
+        VS_TITLE_DONE => 7,
+        _ => vs,
+    }
+}
+
+/// the state after a part with transition mask tm (the part must allow vs)
+#[inline(always)]
+fn vs_to(vs: usize, tm: u8) -> usize {
+    if tm & TM_CAPS == 0 {
+        vs
+    } else if vs == VS_CAP_PENDING {
+        VS_CAP_DONE
+    } else if vs == VS_TITLE_PENDING {
+        VS_TITLE_DONE
+    } else {
+        vs
+    }
+}
+
+/// a set of pending states moved to their done states if the part has a cased char
+#[inline(always)]
+fn vs_move(m: u16, tm: u8) -> u16 {
+    if tm & TM_CAPS == 0 {
+        return m;
+    }
+    let mut m = m;
+    if m & 1 << VS_CAP_PENDING != 0 {
+        m = (m & !(1 << VS_CAP_PENDING)) | 1 << VS_CAP_DONE;
+    }
+    if m & 1 << VS_TITLE_PENDING != 0 {
+        m = (m & !(1 << VS_TITLE_PENDING)) | 1 << VS_TITLE_DONE;
+    }
+    m
+}
+
+/// the states a core or suffix with transition mask tm can follow (bit mask)
+#[inline(always)]
+fn vs_allow(tm: u8) -> u16 {
+    let has = |b: u8| tm & b != 0;
+    let mut m = (tm & 31) as u16; // 0 .. 4
+    if has(TM_CAP) {
+        m |= 3 << 5; // camel, Pascal
+    }
+    if has(TM_TITLE) {
+        m |= 1 << VS_TITLE_PENDING;
+    }
+    if has(TM_AS) {
+        m |= 1 << VS_CAP_DONE;
+    }
+    if has(TM_LOW) {
+        m |= 1 << VS_TITLE_DONE;
+    }
+    m
+}
+
+/// the states after a prefix with transition mask tm, from the token start (bit mask)
+#[inline(always)]
+fn vs_start(tm: u8) -> u16 {
+    let has = |b: u8| tm & b != 0;
+    let mut m = (tm & 31) as u16; // 0 .. 4 (1: pending)
+    if has(TM_AS) {
+        m |= 1 << 5; // camel: the prefix as stored
+    }
+    if has(TM_CAP) {
+        m |= 1 << 6; // Pascal
+    }
+    if has(TM_TITLE) {
+        m |= 1 << VS_TITLE_PENDING;
+    }
+    vs_move(m, tm)
+}
+
+/// the set of states after a core or suffix with transition mask tm, from the set `from`
+#[inline(always)]
+fn vs_after(from: u16, tm: u8) -> u16 {
+    vs_move(from & vs_allow(tm), tm)
+}
+
+/// case_cores: which variations write a span of text from a canonical spelling of the same folded
+/// string, accumulated char by char. The canonical spelling is the folded string with the chars
+/// in its upper mask uc made uppercase (bit k = char k; chars from 64 on are always folded).
+/// Written forms per char (canonical char c, folded f): 0 c, 1 upper(f) for the first char else c,
+/// 2 upper(f), 3 c if uppercase else trad(f), 4 f; upper / trad = the per-symbol maps, or the
+/// char itself where there is none. So with up = the span's uppercase chars and hasu = its chars
+/// with an uppercase form: 0 needs up == uc, 1 up == uc | (hasu & 1), 3 up == uc, 4 up == 0, and
+/// 2 up == hasu; 0, 1, 2, 4 no Traditional char, 3 no Simplified char it would change.
+#[derive(Clone, Copy, Default)]
+struct CaseAcc {
+    up: u64,
+    hasu: u64,
+    trad: bool,
+    hs: bool,
+    hi_up: bool, // an uppercase char from position 64 on
+    hi_v2: bool, // a char from 64 on that UPPER does not write
+    hi_h: bool,  // a char with an uppercase form from 64 on
+    bad: bool,
+}
+
+impl CaseAcc {
+    #[inline(always)]
+    fn push(&mut self, cf: u8, k: usize) {
+        let (u, h) = (cf & CF_UP != 0, cf & CF_HASU != 0);
+        if k < 64 {
+            self.up |= (u as u64) << k;
+            self.hasu |= (h as u64) << k;
+        } else {
+            self.hi_up |= u;
+            self.hi_v2 |= u != h;
+            self.hi_h |= h;
+        }
+        self.trad |= cf & CF_TRAD != 0;
+        self.hs |= cf & CF_HS != 0;
+        self.bad |= cf & CF_BAD != 0;
+    }
+    /// no longer span can be written by any variation
+    #[inline(always)]
+    fn dead(&self) -> bool {
+        self.bad || (self.trad && self.hs)
+    }
+    /// the cheapest variation (lowest id on a tie) writing the span from canonical mask uc
+    #[inline(always)]
+    fn best(&self, uc: u64, vcost: &[f64; NVAR_MAX]) -> Option<usize> {
+        if self.bad {
+            return None;
+        }
+        let plain = !self.trad && !self.hi_up;
+        let ok = [
+            plain && self.up == uc,
+            plain && self.up == uc | (self.hasu & 1),
+            !self.trad && !self.hi_v2 && self.up == self.hasu,
+            !self.hs && !self.hi_up && self.up == uc,
+            plain && self.up == 0,
+        ];
+        let mut best: Option<usize> = None;
+        for v in 0..NVAR_CASE {
+            if ok[v] && best.is_none_or(|b| vcost[v] < vcost[b]) {
+                best = Some(v);
+            }
+        }
+        best
+    }
+    /// case_affixes: the transition mask (TM_*, see VS_*) of the span as one part of a token,
+    /// written from canonical mask uc. TM_AS, TM_UP, TM_TRAD, TM_LOW: the conditions of best() for
+    /// 0, 2, 3, 4; TM_CAP: a part with cased chars needs up == uc | (its first cased char), one
+    /// without any is written as stored; TM_TITLE: up == (its first cased char), whatever uc.
+    /// (TM_CAP and TM_TITLE are never set for a part whose first cased char lies at position
+    /// >= 64: conservative, never lossy.)
+    #[inline(always)]
+    fn tm(&self, uc: u64) -> u8 {
+        if self.bad {
+            return 0;
+        }
+        let plain = !self.trad && !self.hi_up;
+        let ok0 = plain && self.up == uc;
+        let mut m = 0u8;
+        if ok0 {
+            m |= TM_AS;
+        }
+        if self.hasu != 0 || self.hi_h {
+            m |= TM_CAPS;
+            if self.hasu != 0 && plain && self.up == uc | (self.hasu & self.hasu.wrapping_neg()) {
+                m |= TM_CAP;
+            }
+        } else if ok0 {
+            m |= TM_CAP;
+        }
+        if !self.trad && !self.hi_v2 && self.up == self.hasu {
+            m |= 1 << 2;
+        }
+        if !self.hs && !self.hi_up && self.up == uc {
+            m |= 1 << 3;
+        }
+        if plain && self.up == 0 {
+            m |= TM_LOW;
+        }
+        // Title: the first cased char upper, all other chars folded
+        if self.hasu != 0 || self.hi_h {
+            if self.hasu != 0 && plain && self.up == self.hasu & self.hasu.wrapping_neg() {
+                m |= TM_TITLE;
+            }
+        } else if plain && self.up == 0 {
+            m |= TM_TITLE;
+        }
+        m
+    }
+}
+
 struct Symbols {
     fold: Vec<u32>,
     flag: Vec<u32>,
@@ -303,9 +727,73 @@ struct Symbols {
     trad_of: Vec<u32>,
     nbytes: Vec<u32>,
     alnum: Vec<u32>,
+    cf: Vec<u8>, // case_cores char classes (CF_*)
+    mark_rule: bool, // no token, core or prefix starts at a combining mark (alnum == 3)
+}
+
+const MARK_MAGIC: u32 = u32::from_le_bytes(*b"MARK");
+const CODE_MAGIC: u32 = u32::from_le_bytes(*b"CLEN");
+/// code_len: pairs seen fewer times than this in the parse are not kept (they back off like unseen
+/// pairs; the core's count and Witten-Bell partner count still include them). Keeps the model file
+/// small: at 64k / 5M chars per source, all pairs were ~2.2M (26 MB).
+const CL_MIN_PAIR: f64 = 2.0;
+/// code_len: pair bits and backoff offsets are multiples of 1 / CL_Q bit (stored as u16, so below
+/// 64 bits), the same in training and in the model file
+const CL_Q: f64 = 1024.0;
+
+fn cl_q(bits: f64) -> f32 {
+    ((bits * CL_Q).round().clamp(0.0, 65535.0) / CL_Q) as f32
+}
+
+/// code_len (see the header): the code length statistics of the current parse, as bits ready for
+/// the DP. Pair bits are kept as f32 (as stored in the model file), so training and encoding add
+/// exactly the same numbers.
+#[derive(Clone, Default)]
+struct CodeLen {
+    on: bool,   // code_len = 1
+    w: f64,     // code_w: primary cost per bit (0 = the bits only break ties)
+    beta: f64,  // fixed backoff weight; 0 = Witten-Bell (distinct partners of the core)
+    byte: f64,  // bits per byte of a byte-fallback char
+    // code_w without code_len (see the header): w x the token's unconditional bits in the primary
+    // cost of the 3-state DP (wu = w; 0 with code_len or without code_w), and wv[v] = wu x vcost[v]
+    // (refreshed with the arcs)
+    wu: f64,
+    wv: [f64; NVAR_MAX],
+    // -log2 p(prefix | core) by (prefix, core) [0], -log2 p(suffix | core) by (core, suffix) [1],
+    // -log2 p(variation | core) by (core, variation) [2]: the observed pairs
+    pair: [HashMap<(u32, u32), f32, Fast>; 3],
+    bo: Vec<[f32; 3]>,           // per core row: log2((n(c) + beta) / beta) per side (0 if unseen; f32 as stored)
+    vb: Vec<[f64; NVAR_MAX]>,    // per core row: -log2 p(v | c) (dense copy of pair[2] + backoff)
+    // the same pairs per core, for the DP: adj[k].1[adj[k].0[c]..adj[k].0[c + 1]] = (affix, bits),
+    // sorted by affix (k = 0 prefixes, 1 suffixes)
+    adj: [(Vec<u32>, Vec<(u32, f32)>); 2],
+}
+
+impl CodeLen {
+    /// the per-core adjacency lists of pair[0], pair[1] (after the maps or bo change)
+    fn index(&mut self) {
+        let nc = self.bo.len();
+        for k in 0..2 {
+            let mut e: Vec<(u32, u32, f32)> =
+                self.pair[k].iter().map(|(&(a, b), &v)| if k == 0 { (b, a, v) } else { (a, b, v) }).collect();
+            e.sort_unstable_by_key(|x| (x.0, x.1));
+            let mut start = vec![0u32; nc + 1];
+            for x in &e {
+                start[x.0 as usize + 1] += 1;
+            }
+            for c in 0..nc {
+                start[c + 1] += start[c];
+            }
+            self.adj[k] = (start, e.into_iter().map(|x| (x.1, x.2)).collect());
+        }
+    }
 }
 
 impl Symbols {
+    /// mark_rule: may no prefix or core start at x (a combining mark)?
+    fn mark_at(&self, x: u32) -> bool {
+        self.mark_rule && !is_byte(x) && self.alnum.get(x as usize) == Some(&3)
+    }
     fn byte_len(&self, x: u32) -> u32 {
         if is_byte(x) {
             x - NONE_BASE
@@ -320,6 +808,29 @@ impl Symbols {
             3 => HT,
             _ => 0,
         }
+    }
+    /// the case_cores char classes (CF_*), from the maps
+    fn init_case(&mut self) {
+        let n = self.fold.len();
+        self.cf = (0..n)
+            .map(|c| {
+                let f = self.fold[c] as usize;
+                let (up, tr) = (self.upper_of[f], self.trad_of[f]);
+                let mut m = if up != NONE { CF_HASU } else { 0 };
+                if f == c {
+                    if tr != NONE {
+                        m |= CF_HS;
+                    }
+                } else if up == c as u32 {
+                    m |= CF_UP;
+                } else if tr == c as u32 {
+                    m |= CF_TRAD;
+                } else {
+                    m |= CF_BAD;
+                }
+                m
+            })
+            .collect();
     }
     fn written<'s>(&'s self, s: &'s [u32], v: u32) -> impl Iterator<Item = u32> + 's {
         s.iter()
@@ -352,12 +863,13 @@ struct Table {
     glue: Vec<f64>, // fragment / glue score (nu_permille), fixed from the raw text
     price: Vec<f64>, // one-time row price in tokens (price_permille); 0 = free
     usec: Vec<f64>,  // extra primary cost per use: nu x glue + rare x bits (fixed per row)
+    umask: Vec<u64>, // case_cores: upper mask of a core row's canonical spelling (CaseAcc); case_affixes: affix rows too
     scored: usize,   // rows whose glue and price are set (rebuild)
 }
 
 impl Table {
     fn new(with_empty: bool) -> Self {
-        let mut t = Table { strs: vec![], alive: vec![], map: HashMap::default(), cost: vec![], spec: vec![], glue: vec![], price: vec![], usec: vec![], scored: 0 };
+        let mut t = Table { strs: vec![], alive: vec![], map: HashMap::default(), cost: vec![], spec: vec![], glue: vec![], price: vec![], usec: vec![], umask: vec![], scored: 0 };
         if with_empty {
             t.add(&[]);
         }
@@ -377,6 +889,7 @@ impl Table {
         self.spec.push(0.0);
         self.glue.push(0.0);
         self.usec.push(0.0);
+        self.umask.push(0);
         self.price.push(0.0);
         true
     }
@@ -508,7 +1021,10 @@ struct Tok {
 struct Dict<'a> {
     sym: &'a Symbols,
     tabs: [Table; 3], // cores (folded), prefixes, suffixes
-    vcost: [f64; 4],
+    vcost: [f64; NVAR_MAX], // variation costs (the first 4 unless case_cores; 5, or 7 with case_affixes)
+    case: bool,              // case_cores: cores carry canonical spellings (CaseAcc)
+    ca: bool,                // case_affixes: affixes too, and the variation applies to the whole token
+    canon: &'a HashMap<u64, u64, Fast>, // case_cores: upper mask by folded-string hash (0 if absent)
     delta: f64,
     lam: f64,
     mu: f64,
@@ -526,19 +1042,24 @@ struct Dict<'a> {
     nu: f64,
     frag: &'a [HashMap<u64, f32, Fast>; 3], // glue scores by string hash: cores (folded), prefixes, suffixes (raw)
     pricing: &'a Pricing,
+    cl: CodeLen, // code_len statistics (cl.on = false: off)
 }
 
 /// 64-bit hash of a symbol string (splitmix64 steps; symbol 0 and leading symbols all count,
 /// unlike Fx, which maps a leading 0 to the empty state)
 fn seq_hash(s: impl Iterator<Item = u32>) -> u64 {
-    let mut h: u64 = 0x9e37_79b9_7f4a_7c15;
-    for c in s {
-        h = (h ^ (c as u64 + 1)).wrapping_add(0x9e37_79b9_7f4a_7c15);
-        h = (h ^ (h >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        h = (h ^ (h >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        h ^= h >> 31;
-    }
-    h
+    s.fold(SEQ_H0, seq_step)
+}
+
+const SEQ_H0: u64 = 0x9e37_79b9_7f4a_7c15;
+
+/// one symbol of seq_hash (so a growing string can be hashed incrementally)
+#[inline(always)]
+fn seq_step(h: u64, c: u32) -> u64 {
+    let mut h = (h ^ (c as u64 + 1)).wrapping_add(0x9e37_79b9_7f4a_7c15);
+    h = (h ^ (h >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    h = (h ^ (h >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    h ^ (h >> 31)
 }
 
 /// Row pricing (price_permille): see the header.
@@ -556,6 +1077,11 @@ struct Pricing {
     script_chars: Vec<f64>,         // training chars per script group
     rawcnt: HashMap<u64, u64, Fast>, // raw count of every frequent substring and every char
     min_freq: f64,
+    sig_k: f64,
+    sig_share: f64,
+    sig_soft: bool,
+    swap_share: f64,
+    swap_self: f64, // > 0: also propose merges whose saved affix bits pay swap_self x their price
 }
 
 /// D(a) for every frequent prefix / suffix string: distinct remainders c (len >= 2) with a.c / c.a
@@ -604,6 +1130,128 @@ fn affix_stems(x: &[u32], subs: &[(u32, u16, u32)], threads: usize) -> [HashMap<
         }
     }
     out
+}
+
+/// case_cores: the canonical spelling of every folded frequent substring and single char whose
+/// most frequent raw spelling has capitals, as an upper mask (CaseAcc) by folded-string hash.
+/// A spelling's count sums the raw strings with that case pattern (Han spellings count together:
+/// Han stays folded); ties go to the smaller mask, so all-folded wins a tie.
+/// case_affixes (ca): the spelling that WRITES the most occurrences wins instead (coverage), since
+/// one variation covers the whole token: from canonical C, a spelling is written if it is C (as
+/// stored), all folded (lower), all upper (UPPER), or C with its first cased char upper (at the
+/// token start by Capitalised, mid-word after a lowercase letter by camelCase / PascalCase:
+/// get+Name); and all folded from a capitalised C when not mid-word (lower folds the whole token:
+/// filename = file + name is not written from Name), or mid-word inside a Title-shaped word
+/// (Rathaus = Title(rat + Haus): one capital letter, then only lowercase letters, counted from
+/// the frequent substrings that start at that capital; this assumes the token starts at or
+/// before the capital with no cased char before it, as after a space, and misses such words
+/// longer than max_len, so it undercounts). So name stays lowercase when its lowercase uses
+/// (filename, username, name) and its capitalised ones (getName, Name) together outnumber the
+/// uses only a capitalised canonical writes. (Title's other spellings, iPhone -> Iphone at a token
+/// start, are not counted: conservative.)
+fn canonical_masks(sym: &Symbols, x: &[u32], wt: &[u32], subs: &[(u32, u16, u32)], ca: bool) -> HashMap<u64, u64, Fast> {
+    let up = |c: u32| sym.cf[c as usize] & CF_UP != 0;
+    let mask = |w: &[u32]| w.iter().take(64).enumerate().fold(0u64, |m, (k, &c)| m | ((up(c) as u64) << k));
+    let fold_hash = |w: &[u32]| seq_hash(w.iter().map(|&c| sym.fold[c as usize]));
+    // raw count per (folded string, mask); only folded strings with some capitalised spelling
+    let mut uni = vec![0u64; sym.fold.len()];
+    for (i, &c) in x.iter().enumerate() {
+        if c != NONE && !is_byte(c) {
+            uni[c as usize] += wt[i] as u64;
+        }
+    }
+    let mut cased: std::collections::HashSet<u64, Fast> = Default::default();
+    for &(p, l, _) in subs {
+        let w = &x[p as usize..p as usize + l as usize];
+        if w.iter().any(|&c| up(c)) {
+            cased.insert(fold_hash(w));
+        }
+    }
+    let mut cnt: HashMap<(u64, u64), u64, Fast> = HashMap::default();
+    for (c, &n) in uni.iter().enumerate() {
+        if n > 0 {
+            let w = [c as u32];
+            *cnt.entry((fold_hash(&w), mask(&w))).or_insert(0) += n;
+        }
+    }
+    for &(p, l, n) in subs {
+        let w = &x[p as usize..p as usize + l as usize];
+        let h = fold_hash(w);
+        if cased.contains(&h) {
+            *cnt.entry((h, mask(w))).or_insert(0) += n as u64;
+        }
+    }
+    if ca {
+        // all-folded occurrences of each spelling right after a letter, from the frequent
+        // one-char-longer substrings; and each cased folded string's chars with an uppercase form
+        let letter = |c: u32| !is_byte(c) && sym.cf[c as usize] & CF_HASU != 0;
+        let mut mid_low: HashMap<u64, u64, Fast> = HashMap::default(); // all-folded spellings after a letter
+        let mut mid_title: HashMap<u64, u64, Fast> = HashMap::default(); // those in a Title-shaped word
+        let mut hasu: HashMap<u64, u64, Fast> = HashMap::default();
+        for &(p, l, n) in subs {
+            let w = &x[p as usize..p as usize + l as usize];
+            let h = fold_hash(w);
+            if cased.contains(&h) {
+                hasu.entry(h).or_insert_with(|| {
+                    w.iter().take(64).enumerate().fold(0u64, |m, (k, &c)| m | (((sym.cf[c as usize] & CF_HASU != 0) as u64) << k))
+                });
+            }
+            if l >= 2 && letter(w[0]) && letter(w[1]) && w[1..].iter().all(|&c| !up(c)) {
+                let ht = fold_hash(&w[1..]);
+                if cased.contains(&ht) {
+                    *mid_low.entry(ht).or_insert(0) += n as u64;
+                }
+            }
+            // Title: an all-folded tail inside a Title-shaped word (one capital letter, then only
+            // lowercase letters: Rat|haus, Kranken|haus) is written by Title from any canonical
+            // spelling, so those mid-word occurrences are not lost to a capitalised canonical
+            if l >= 2 && letter(w[0]) && up(w[0]) && w[1..].iter().all(|&c| letter(c) && !up(c)) {
+                for k in 1..l as usize {
+                    let ht = fold_hash(&w[k..]);
+                    if cased.contains(&ht) {
+                        *mid_title.entry(ht).or_insert(0) += n as u64;
+                    }
+                }
+            }
+        }
+        let mut spellings: HashMap<u64, Vec<(u64, u64)>, Fast> = HashMap::default();
+        for (&(h, m), &n) in &cnt {
+            spellings.entry(h).or_default().push((m, n));
+        }
+        let mut out: HashMap<u64, u64, Fast> = HashMap::default();
+        for (h, mut sp) in spellings {
+            sp.sort_unstable(); // by mask: a deterministic order
+            let hu = hasu.get(&h).copied().unwrap_or_else(|| sp.iter().fold(0, |a, &(m, _)| a | m));
+            let first = hu & hu.wrapping_neg(); // the first char with an uppercase form
+            let cov = |c: u64| -> u64 {
+                sp.iter().map(|&(m, n)| {
+                    if m == c || m == hu || (m == 0 && c == 0) || m == c | first {
+                        n
+                    } else if m == 0 {
+                        let title = mid_title.get(&h).copied().unwrap_or(0);
+                        n.saturating_sub(mid_low.get(&h).copied().unwrap_or(0).saturating_sub(title))
+                    } else {
+                        0
+                    }
+                }).sum()
+            };
+            // (coverage, raw count, then the smaller mask)
+            let best = sp.iter().map(|&(m, n)| (cov(m), n, std::cmp::Reverse(m))).max().unwrap();
+            let m = best.2 .0;
+            if m != 0 {
+                out.insert(h, m);
+            }
+        }
+        return out;
+    }
+    let mut best: HashMap<u64, (u64, u64), Fast> = HashMap::default();
+    for (&(h, m), &n) in &cnt {
+        let e = best.entry(h).or_insert((n, m));
+        if n > e.0 || (n == e.0 && m < e.1) {
+            *e = (n, m);
+        }
+    }
+    best.into_iter().filter(|&(_, (_, m))| m != 0).map(|(h, (_, m))| (h, m)).collect()
 }
 
 /// Fragment scores of the (folded) frequent substrings: see nu_permille in the header.
@@ -694,12 +1342,17 @@ fn fragment_scores(sym: &Symbols, x: &[u32], wt: &[u32], subs: &[(u32, u16, u32)
 struct Arcs {
     start: Vec<u32>,
     arcs: Vec<(u32, f64, f64)>,
+    tm: Vec<u8>, // case_affixes: every arc's transition mask (CaseAcc::tm)
 }
 
 impl Arcs {
     #[inline]
     fn get(&self, i: usize, k: usize) -> &[(u32, f64, f64)] {
         &self.arcs[self.start[3 * i + k] as usize..self.start[3 * i + k + 1] as usize]
+    }
+    #[inline]
+    fn get_tm(&self, i: usize, k: usize) -> &[u8] {
+        &self.tm[self.start[3 * i + k] as usize..self.start[3 * i + k + 1] as usize]
     }
 }
 
@@ -710,6 +1363,7 @@ struct Extra {
     cost: f64,
     spec: f64,
     usec: f64,
+    umask: u64, // core: its canonical upper mask (case_cores; affixes too with case_affixes)
 }
 
 const EXTRA: u32 = u32::MAX - 1;
@@ -720,6 +1374,7 @@ struct Back {
     from: u32,
     id: u32,
     v: u8,
+    fvs: u8, // case_affixes: the variation state of the source entry (0 otherwise)
 }
 
 struct Scratch {
@@ -731,7 +1386,9 @@ struct Scratch {
     pe: Vec<Vec<PEnt>>,
     ce: Vec<Vec<CEnt>>,
     cm: Vec<(usize, u32, u8, f64, f64)>,
-    sm: Vec<(usize, u32, f64, f64)>,
+    slot: Vec<u32>, // parse_pair: index in ce[k] of the entry of core arc q and variation state vs
+    pbc: Vec<(u32, f64)>, // parse_pair, code_len: per core arc, the last prefix id and its bits given the core
+    sm: Vec<(usize, u32, f64, f64, u8)>,
 }
 
 impl Scratch {
@@ -744,6 +1401,8 @@ impl Scratch {
             pe: vec![],
             ce: vec![],
             cm: vec![],
+            slot: vec![],
+            pbc: vec![],
             sm: vec![],
         }
     }
@@ -753,6 +1412,7 @@ impl Scratch {
 #[derive(Clone, Copy)]
 struct PEnt {
     pid: u32,
+    vs: u8, // case_affixes: variation state (0 otherwise)
     s: (f64, f64),
     from: u32,
 }
@@ -762,6 +1422,7 @@ struct PEnt {
 struct CEnt {
     cid: u32,
     v: u8,
+    vs: u8, // case_affixes: variation state (0 otherwise)
     s: (f64, f64),
     fpos: u32,
     fidx: u32,
@@ -777,18 +1438,7 @@ struct BBack {
 }
 
 fn add_p(v: &mut Vec<PEnt>, e: PEnt) {
-    match v.iter_mut().find(|o| o.pid == e.pid) {
-        Some(o) => {
-            if better(e.s, o.s) {
-                *o = e;
-            }
-        }
-        None => v.push(e),
-    }
-}
-
-fn add_c(v: &mut Vec<CEnt>, e: CEnt) {
-    match v.iter_mut().find(|o| o.cid == e.cid) {
+    match v.iter_mut().find(|o| o.pid == e.pid && o.vs == e.vs) {
         Some(o) => {
             if better(e.s, o.s) {
                 *o = e;
@@ -809,6 +1459,12 @@ impl<'a> Dict<'a> {
         // rebuild need them (rows are only ever appended)
         for k in 0..3 {
             let from = self.tabs[k].scored;
+            if k > 0 && self.ca {
+                // (first: an affix's statistics are looked up by its canonical spelling)
+                for i in from..self.tabs[k].strs.len() {
+                    self.tabs[k].umask[i] = self.canon_mask(&self.tabs[k].strs[i]);
+                }
+            }
             if !self.frag[0].is_empty() {
                 for i in from..self.tabs[k].strs.len() {
                     self.tabs[k].glue[i] = self.glue_of(k, &self.tabs[k].strs[i]);
@@ -824,6 +1480,11 @@ impl<'a> Dict<'a> {
                     self.tabs[k].usec[i] = self.usec_of(k, &self.tabs[k].strs[i]);
                 }
             }
+            if k == 0 && self.case {
+                for i in from..self.tabs[k].strs.len() {
+                    self.tabs[k].umask[i] = self.canon_mask(&self.tabs[k].strs[i]);
+                }
+            }
             self.tabs[k].scored = self.tabs[k].strs.len();
         }
         self.refresh_arcs();
@@ -832,21 +1493,283 @@ impl<'a> Dict<'a> {
     /// it (cores: without the variation cost), in node order: a trie walk then reads it next to
     /// the node instead of from four row arrays. Refreshed whenever tries, costs or specs change.
     fn refresh_arcs(&mut self) {
-        let (delta, lam, mu) = (self.delta, self.lam, self.mu);
+        // (code_w without code_len: + wu x the row's bits; wu = 0 adds exactly 0)
+        let (delta, lam, mu, wu) = (self.delta, self.lam, self.mu, self.cl.wu);
+        let lam_a = lam + wu;
         for k in 0..3 {
             let t = &self.tabs[k];
             for nd in self.tries[k].node.iter_mut() {
                 let r = nd.term as usize;
                 nd.arc = match (nd.term == NONE, k) {
                     (true, _) => INF,
-                    (_, 0) => (1.0 + t.usec[r], t.cost[r]),
-                    _ => (delta + lam * t.cost[r] + mu * t.spec[r] + t.usec[r], t.cost[r]),
+                    (_, 0) => (1.0 + t.usec[r] + wu * t.cost[r], t.cost[r]),
+                    _ => (delta + lam_a * t.cost[r] + mu * t.spec[r] + t.usec[r], t.cost[r]),
                 };
             }
+        }
+        self.cl.wv = std::array::from_fn(|v| wu * self.vcost[v]);
+    }
+    /// primary cost of an extra affix row's arc (as refresh_arcs makes a row's)
+    #[inline(always)]
+    fn extra_affix_prim(&self, e: &Extra) -> f64 {
+        self.delta + (self.lam + self.cl.wu) * e.cost + self.mu * e.spec + e.usec
+    }
+    /// primary cost of an extra core row's arc with variation v (as refresh_arcs makes a row's,
+    /// plus the variation's wv)
+    #[inline(always)]
+    fn extra_core_prim(&self, e: &Extra, v: usize) -> f64 {
+        1.0 + e.usec + self.cl.wu * e.cost + self.cl.wv[v]
+    }
+    /// case_cores: upper mask of the canonical spelling of a folded core string (0 = all folded;
+    /// only chars with an uppercase form, so a hash collision cannot make it unwritable)
+    fn canon_mask(&self, s: &[u32]) -> u64 {
+        if !self.case {
+            return 0;
+        }
+        let m = self.canon.get(&seq_hash(s.iter().copied())).copied().unwrap_or(0);
+        m & self.hasu_mask(s)
+    }
+    fn hasu_mask(&self, s: &[u32]) -> u64 {
+        s.iter().take(64).enumerate().fold(0, |m, (k, &c)| m | (((self.sym.upper_of[c as usize] != NONE) as u64) << k))
+    }
+    /// case_affixes: the canonical spelling of an affix string (folded) as the raw-text statistics
+    /// (glue, stems, rarity) know it; other strings as they are
+    fn stat_str<'s>(&self, k: usize, s: &'s [u32]) -> std::borrow::Cow<'s, [u32]> {
+        if k == 0 || !self.ca || s.is_empty() {
+            return std::borrow::Cow::Borrowed(s);
+        }
+        let mut out = Vec::with_capacity(s.len());
+        self.write_parts(&[(s, self.canon_mask(s))], false, 0, &mut out);
+        std::borrow::Cow::Owned(out)
+    }
+    /// case_affixes: a token's parts (folded strings with their canonical upper masks; the first is
+    /// a prefix if `prefix`) written as one text with variation v (see the header), appended to out
+    fn write_parts(&self, parts: &[(&[u32], u64)], prefix: bool, v: u32, out: &mut Vec<u32>) {
+        let sym = self.sym;
+        let mut first = v == 1 || v == 7; // the first char with an uppercase form is still to come
+        for (pi, &(row, uc)) in parts.iter().enumerate() {
+            // camelCase: every part's own first cased char but a prefix's; PascalCase: every part's
+            if v == 6 || (v == 5 && !(prefix && pi == 0)) {
+                first = true;
+            }
+            out.extend(row.iter().enumerate().map(|(k, &f)| {
+                let u = sym.upper_of[f as usize];
+                let upper = k < 64 && uc >> k & 1 != 0;
+                let or = |t: u32| if t == NONE { f } else { t };
+                match v {
+                    0 | 1 | 5 | 6 => {
+                        if u != NONE && first {
+                            first = false;
+                            u
+                        } else if upper {
+                            u
+                        } else {
+                            f
+                        }
+                    }
+                    2 => or(u),
+                    3 if upper => u,
+                    3 => or(sym.trad_of[f as usize]),
+                    // Title: the token's first cased char upper, everything else folded
+                    7 if u != NONE && first => {
+                        first = false;
+                        u
+                    }
+                    _ => f,
+                }
+            }));
+        }
+    }
+    /// the text of core row r written with variation v, appended to out
+    fn write_core(&self, r: usize, v: u32, out: &mut Vec<u32>) {
+        let row = &self.tabs[0].strs[r];
+        if self.ca {
+            // (a core-only token: the whole-token variation, see case_affixes)
+            self.write_parts(&[(row, self.tabs[0].umask[r])], false, v, out);
+            return;
+        }
+        if !self.case {
+            out.extend(self.sym.written(row, v));
+            return;
+        }
+        let uc = self.tabs[0].umask[r];
+        let sym = self.sym;
+        out.extend(row.iter().enumerate().map(|(k, &f)| {
+            let or = |t: u32| if t == NONE { f } else { t };
+            let upper = k < 64 && uc >> k & 1 != 0;
+            match v {
+                0 if upper => sym.upper_of[f as usize],
+                1 if k == 0 || upper => or(sym.upper_of[f as usize]),
+                2 => or(sym.upper_of[f as usize]),
+                3 if upper => sym.upper_of[f as usize],
+                3 => or(sym.trad_of[f as usize]),
+                _ => f,
+            }
+        }));
+    }
+    /// The core trie walk from x[i]: f(j, node, v) for every usable row spelling x[i..=j] (folded)
+    /// that a variation writes exactly, with the variation the parse takes (cheapest, lowest id).
+    /// Old cores (case off): the span's own mask decides, and the walk stops at the first span no
+    /// variation writes (camelCase). case_cores: the row's canonical spelling decides (CaseAcc).
+    #[inline(always)]
+    fn core_walk(&self, x: &[u32], i: usize, ban: Ban, mut f: impl FnMut(usize, &Node, usize)) {
+        if self.sym.mark_at(x[i]) {
+            return; // mark_rule: no core starts at a combining mark
+        }
+        let tr = &self.tries[0];
+        let mut node = 0u32;
+        if !self.case {
+            let mut m = 0u8;
+            for j in i..x.len() {
+                let c = x[j];
+                if is_byte(c) {
+                    break;
+                }
+                let Some(nn) = tr.step(node, self.sym.fold[c as usize]) else { break };
+                node = nn;
+                m = if j == i { self.sym.mask(c) } else { combine(m, self.sym.mask(c)) };
+                let Some(v) = variation(m) else { break };
+                let nd = &tr.node[node as usize];
+                if self.usable(0, nd.term, ban) {
+                    f(j, nd, v);
+                }
+            }
+            return;
+        }
+        let mut ca = CaseAcc::default();
+        for j in i..x.len() {
+            let c = x[j];
+            if is_byte(c) {
+                break;
+            }
+            let Some(nn) = tr.step(node, self.sym.fold[c as usize]) else { break };
+            node = nn;
+            ca.push(self.sym.cf[c as usize], j - i);
+            if ca.dead() {
+                break;
+            }
+            let nd = &tr.node[node as usize];
+            if self.usable(0, nd.term, ban) {
+                // (code_len: the variation cheapest given this core)
+                let uc = self.tabs[0].umask[nd.term as usize];
+                let best = if self.cl.on {
+                    ca.best(uc, &std::array::from_fn(|v| self.cl_vbits(nd.term, v)))
+                } else {
+                    ca.best(uc, &self.vcost)
+                };
+                if let Some(v) = best {
+                    f(j, nd, v);
+                }
+            }
+        }
+    }
+    /// case_affixes: the walk of trie k (0 cores, 1 prefixes, 2 suffixes; all keyed folded) from
+    /// x[i]: f(j, node, tm) for every usable row spelling x[i..=j] folded, with the span's
+    /// transition mask from the row's canonical spelling (only if some state can take it)
+    #[inline(always)]
+    fn walk_ca(&self, k: usize, x: &[u32], i: usize, ban: Ban, mut f: impl FnMut(usize, &Node, u8)) {
+        if k < 2 && self.sym.mark_at(x[i]) {
+            return; // mark_rule: no core or prefix starts at a combining mark
+        }
+        let (tr, um) = (&self.tries[k], &self.tabs[k].umask);
+        let mut node = 0u32;
+        let mut ca = CaseAcc::default();
+        for j in i..x.len() {
+            let c = x[j];
+            if is_byte(c) {
+                break;
+            }
+            let Some(nn) = tr.step(node, self.sym.fold[c as usize]) else { break };
+            node = nn;
+            ca.push(self.sym.cf[c as usize], j - i);
+            if ca.dead() {
+                break;
+            }
+            let nd = &tr.node[node as usize];
+            if self.usable(k, nd.term, ban) {
+                let tm = ca.tm(um[nd.term as usize]);
+                if tm & TM_ALL != 0 {
+                    f(j, nd, tm);
+                }
+            }
+        }
+    }
+    /// case_affixes: the transition mask of an extra row at x[i..] (None if it does not fit)
+    fn extra_tm(&self, x: &[u32], i: usize, e: &Extra) -> Option<u8> {
+        let l = e.s.len();
+        if i + l > x.len() || (e.t < 2 && self.sym.mark_at(x[i])) {
+            return None;
+        }
+        let mut ca = CaseAcc::default();
+        for k in 0..l {
+            let c = x[i + k];
+            if is_byte(c) || self.sym.fold[c as usize] != e.s[k] {
+                return None;
+            }
+            ca.push(self.sym.cf[c as usize], k);
+        }
+        let tm = ca.tm(e.umask);
+        (tm & TM_ALL != 0).then_some(tm)
+    }
+    /// case_affixes: the transition mask of a raw span as a part with the canonical spelling of its
+    /// folded form (hash h of the folded string)
+    fn span_tm(&self, ca: &CaseAcc, h: u64) -> u8 {
+        let uc = if ca.hasu != 0 { self.canon.get(&h).copied().unwrap_or(0) & ca.hasu } else { 0 };
+        ca.tm(uc)
+    }
+    /// the variation the parse takes for an extra core row at x[i..] (None if it does not fit)
+    fn extra_core_var(&self, x: &[u32], i: usize, e: &Extra) -> Option<usize> {
+        let l = e.s.len();
+        if i + l > x.len() || self.sym.mark_at(x[i]) {
+            return None;
+        }
+        let (mut m, mut ca) = (0u8, CaseAcc::default());
+        for k in 0..l {
+            let c = x[i + k];
+            if is_byte(c) || self.sym.fold[c as usize] != e.s[k] {
+                return None;
+            }
+            if self.case {
+                ca.push(self.sym.cf[c as usize], k);
+            } else {
+                m = if k == 0 { self.sym.mask(c) } else { combine(m, self.sym.mask(c)) };
+            }
+        }
+        if self.case {
+            ca.best(e.umask, &self.vcost)
+        } else {
+            variation(m)
+        }
+    }
+    /// Is raw (a text span) a legal core, i.e. does a variation write it from the canonical
+    /// spelling of its folded form? Its folded form into f.
+    fn legal_core(&self, raw: &[u32], f: &mut Vec<u32>) -> bool {
+        let (mut m, mut ca) = (0u8, CaseAcc::default());
+        f.clear();
+        for (i, &ch) in raw.iter().enumerate() {
+            if is_byte(ch) {
+                return false;
+            }
+            if self.case {
+                ca.push(self.sym.cf[ch as usize], i);
+            } else {
+                m = if i == 0 { self.sym.mask(ch) } else { combine(m, self.sym.mask(ch)) };
+            }
+            f.push(self.sym.fold[ch as usize]);
+        }
+        if self.ca {
+            // a core-only token: some start state takes it (whole-token Capitalised)
+            ca.tm(self.canon_mask(f)) & TM_ALL != 0
+        } else if self.case {
+            ca.best(self.canon_mask(f), &[0.0; NVAR_MAX]).is_some()
+        } else {
+            variation(m).is_some()
         }
     }
     /// one-time price of a row string of table k, in tokens
     fn price_of(&self, k: usize, s: &[u32]) -> f64 {
+        let st = self.stat_str(k, s);
+        let s = &*st;
         let pr = self.pricing;
         let pi = if k == 0 { pr.pi_core } else { pr.pi };
         if pi == 0.0 || s.is_empty() || (k == 0 && s.len() == 1) {
@@ -877,6 +1800,8 @@ impl<'a> Dict<'a> {
     }
     /// fixed extra primary cost per use of a row: nu x glue (+ rare x bits for affixes)
     fn usec_of(&self, k: usize, s: &[u32]) -> f64 {
+        let st = self.stat_str(k, s);
+        let s = &*st;
         self.nu * self.glue_of(k, s) + if k > 0 { self.pricing.rare * self.rare_bits(s) } else { 0.0 }
     }
     /// sum of the prices of the live rows
@@ -888,7 +1813,19 @@ impl<'a> Dict<'a> {
         if s.is_empty() || (k == 0 && s.len() < 2) {
             return 0.0;
         }
+        let st = self.stat_str(k, s);
+        let s = &*st;
         self.frag[k].get(&seq_hash(s.iter().copied())).map_or(0.0, |&v| v as f64)
+    }
+    /// DP scores per position of state s: one per variation state in states 1 and 2 with
+    /// case_affixes (slot (position - off) x wid + vs), else one
+    #[inline(always)]
+    fn wid(&self, s: usize) -> usize {
+        if self.ca && s > 0 { NVS } else { 1 }
+    }
+    /// number of variations: 5 with case_cores, else the old 4
+    fn nvar(&self) -> usize {
+        if self.ca { NVAR_MAX } else if self.case { NVAR_CASE } else { 4 }
     }
     fn rows(&self) -> usize {
         self.tabs.iter().map(|t| t.live()).sum()
@@ -919,6 +1856,9 @@ impl<'a> Dict<'a> {
 
     /// Is this string allowed as a row of table t under the restricted-shaped mode?
     fn row_ok(&self, t: usize, s: &[u32]) -> bool {
+        if t < 2 && s.first().is_some_and(|&c| self.sym.mark_at(c)) {
+            return false; // mark_rule: such a row could never be used
+        }
         if !self.classes || s.is_empty() {
             return true;
         }
@@ -953,15 +1893,207 @@ impl<'a> Dict<'a> {
         self.pmi[k].get(&(a, b)).map_or(0.0, |&v| v as f64)
     }
 
+    /// code_len: -log2 p(a | c) of affix row a on side k (0 prefix, 1 suffix) given core c, where
+    /// `ab` = -log2 p(a) (its row cost, or an extra row's). An extra (or unseen) core has no
+    /// counts: the marginal.
+    #[inline(always)]
+    fn cl_abits(&self, k: usize, a: u32, c: u32, ab: f64) -> f64 {
+        let Some(bo) = self.cl.bo.get(c as usize) else { return ab };
+        let (st, it) = &self.cl.adj[k];
+        let l = &it[st[c as usize] as usize..st[c as usize + 1] as usize];
+        let hit = if l.len() <= 8 {
+            l.iter().find(|e| e.0 == a).map(|e| e.1)
+        } else {
+            l.binary_search_by_key(&a, |e| e.0).ok().map(|i| l[i].1)
+        };
+        match hit {
+            Some(b) => b as f64,
+            None => ab + bo[k] as f64,
+        }
+    }
+
+    /// code_len: -log2 p(v | c) (an extra or unseen core: the marginal variation cost)
+    #[inline(always)]
+    fn cl_vbits(&self, c: u32, v: usize) -> f64 {
+        match self.cl.vb.get(c as usize) {
+            Some(r) => r[v],
+            None => self.vcost[v],
+        }
+    }
+
+    /// code_len: the code length of token type t in bits (not a byte token)
+    fn cl_bits(&self, t: &Tok) -> f64 {
+        let (cp, cs) = (&self.tabs[1].cost, &self.tabs[2].cost);
+        self.tabs[0].cost[t.c as usize] + self.cl_vbits(t.c, t.v as usize)
+            + self.cl_abits(0, t.p, t.c, cp[t.p as usize]) + self.cl_abits(1, t.s, t.c, cs[t.s as usize])
+    }
+
+    /// parse_pair: the B score of core-done entry e closed by the empty suffix
+    #[inline(always)]
+    fn pair_close(&self, e: &CEnt) -> (f64, f64) {
+        let (lam, mu, lamc) = (self.lam, self.mu, self.lamc);
+        let (cs, ss) = (&self.tabs[2].cost, &self.tabs[2].spec);
+        let empty_s = (lam * cs[0] + mu * ss[0], cs[0]);
+        let cond = if lamc > 0.0 { lamc * self.cond(1, e.cid, 0, (-cs[0]).exp2()) } else { 0.0 };
+        if self.cl.on {
+            let sb = self.cl_abits(1, 0, e.cid, cs[0]);
+            (e.s.0 + empty_s.0 + cond + self.cl.w * sb, e.s.1 + sb)
+        } else {
+            (e.s.0 + empty_s.0 + cond, e.s.1 + empty_s.1)
+        }
+    }
+
+    /// parse_pair: the core arcs out of i into cm, (end, core id, variation (case_affixes: the
+    /// transition mask), primary, secondary)
+    #[inline(always)]
+    fn pair_core_arcs(&self, x: &[u32], i: usize, ban: Ban, extra: Option<&Extra>, cm: &mut Vec<(usize, u32, u8, f64, f64)>) {
+        let cc = &self.tabs[0].cost;
+        let cl = self.cl.on;
+        cm.clear();
+        // (case_affixes: the u8 is the transition mask and the variation cost is added per
+        // prefix-done entry, pair_ce)
+        if self.ca {
+            self.walk_ca(0, x, i, ban, |j, nd, tm| {
+                let r = nd.term;
+                cm.push((j + 1, r, tm, 1.0 + self.tabs[0].usec[r as usize], cc[r as usize]));
+            });
+            if let Some(e) = extra.filter(|e| e.t == 0) {
+                if let Some(tm) = self.extra_tm(x, i, e) {
+                    cm.push((i + e.s.len(), EXTRA, tm, 1.0 + e.usec, e.cost));
+                }
+            }
+        } else {
+            self.core_walk(x, i, ban, |j, nd, v| {
+                let r = nd.term;
+                let vb = if cl { self.cl_vbits(r, v) } else { self.vcost[v] };
+                cm.push((j + 1, r, v as u8, 1.0 + self.tabs[0].usec[r as usize], cc[r as usize] + vb));
+            });
+            if let Some(e) = extra {
+                if e.t == 0 {
+                    if let Some(v) = self.extra_core_var(x, i, e) {
+                        cm.push((i + e.s.len(), EXTRA, v as u8, 1.0 + e.usec, e.cost + self.vcost[v]));
+                    }
+                }
+            }
+        }
+    }
+
+    /// parse_pair: the suffix arcs out of i into sm, (end, suffix id, primary, secondary, mask)
+    #[inline(always)]
+    fn pair_suffix_arcs(&self, x: &[u32], i: usize, ban: Ban, extra: Option<&Extra>, sm: &mut Vec<(usize, u32, f64, f64, u8)>) {
+        let n = x.len();
+        let (delta, lam, mu) = (self.delta, self.lam, self.mu);
+        let (cs, ss) = (&self.tabs[2].cost, &self.tabs[2].spec);
+        sm.clear();
+        if self.ca {
+            self.walk_ca(2, x, i, ban, |j, nd, tm| {
+                let r = nd.term as usize;
+                sm.push((j + 1, nd.term, delta + lam * cs[r] + mu * ss[r] + self.tabs[2].usec[r], cs[r], tm));
+            });
+            if let Some(e) = extra.filter(|e| e.t == 2) {
+                if let Some(tm) = self.extra_tm(x, i, e) {
+                    sm.push((i + e.s.len(), EXTRA, delta + lam * e.cost + mu * e.spec + e.usec, e.cost, tm));
+                }
+            }
+        } else {
+            let mut node = 0u32;
+            for j in i..n {
+                let Some(m) = self.tries[2].step(node, x[j]) else { break };
+                node = m;
+                let r = self.tries[2].term(node);
+                if self.usable(2, r, ban) {
+                    sm.push((j + 1, r, delta + lam * cs[r as usize] + mu * ss[r as usize] + self.tabs[2].usec[r as usize], cs[r as usize], TM_ALL));
+                }
+            }
+            if let Some(e) = extra {
+                let l = e.s.len();
+                if e.t == 2 && i + l <= n && x[i..i + l] == e.s[..] {
+                    sm.push((i + l, EXTRA, delta + lam * e.cost + mu * e.spec + e.usec, e.cost, TM_ALL));
+                }
+            }
+        }
+    }
+
+    /// parse_pair: the core-done entry (variation, variation state, score) from prefix-done entry
+    /// pe and core arc `arc` (None if the arc does not take pe's variation state). pb() = the
+    /// prefix's code length given the core (code_len only; the caller may cache it).
+    #[inline(always)]
+    fn pair_ce(&self, pe: &PEnt, arc: (usize, u32, u8, f64, f64), extra: Option<&Extra>, pb: impl FnOnce() -> f64)
+        -> Option<(u8, u8, (f64, f64))> {
+        let (mu2, lamc) = (self.mu2, self.lamc);
+        let cp = &self.tabs[1].cost;
+        let (_, cid, mut v, c1, mut c2) = arc;
+        let mut vs = 0u8;
+        if self.ca {
+            let tm = v;
+            if vs_allow(tm) >> pe.vs & 1 == 0 {
+                return None;
+            }
+            v = vs_var(pe.vs as usize) as u8;
+            vs = vs_to(pe.vs as usize, tm) as u8;
+            c2 += if self.cl.on { self.cl_vbits(cid, v as usize) } else { self.vcost[v as usize] };
+        }
+        let mut pair = if mu2 > 0.0 { mu2 * self.pmi_of(0, pe.pid, cid) } else { 0.0 };
+        if lamc > 0.0 {
+            let qa = if pe.pid == EXTRA { (-extra.map_or(20.0, |e| e.cost)).exp2() } else { (-cp[pe.pid as usize]).exp2() };
+            pair += lamc * self.cond(0, pe.pid, cid, qa);
+        }
+        let s = if self.cl.on {
+            // the core's bits: its marginal, the variation's and the prefix's given it
+            let bits = c2 + pb();
+            (pe.s.0 + c1 + pair + self.cl.w * bits, pe.s.1 + bits)
+        } else {
+            (pe.s.0 + c1 + pair, pe.s.1 + c2)
+        };
+        Some((v, vs, s))
+    }
+
+    /// code_len: the prefix's code length given the core, for pair_ce
+    #[inline(always)]
+    fn pair_pb(&self, pid: u32, cid: u32, extra: Option<&Extra>) -> f64 {
+        let pa = if pid == EXTRA { extra.map_or(20.0, |e| e.cost) } else { self.tabs[1].cost[pid as usize] };
+        self.cl_abits(0, pid, cid, pa)
+    }
+
+    /// parse_pair: the B score from core-done entry ce and suffix arc `arc` (None if the arc does
+    /// not take ce's variation state)
+    #[inline(always)]
+    fn pair_bs(&self, ce: &CEnt, arc: (usize, u32, f64, f64, u8), extra: Option<&Extra>) -> Option<(f64, f64)> {
+        let (mu2, lamc) = (self.mu2, self.lamc);
+        let cs = &self.tabs[2].cost;
+        let (_, sid, c1, c2, tm) = arc;
+        if vs_allow(tm) >> ce.vs & 1 == 0 {
+            return None; // (never without case_affixes: vs 0, mask TM_ALL)
+        }
+        let mut pair = if mu2 > 0.0 { mu2 * self.pmi_of(1, ce.cid, sid) } else { 0.0 };
+        if lamc > 0.0 {
+            let qa = if sid == EXTRA { (-extra.map_or(20.0, |e| e.cost)).exp2() } else { (-cs[sid as usize]).exp2() };
+            pair += lamc * self.cond(1, ce.cid, sid, qa);
+        }
+        Some(if self.cl.on {
+            let sb = self.cl_abits(1, sid, ce.cid, c2); // (c2: the suffix's -log2 q)
+            (ce.s.0 + c1 + pair + self.cl.w * sb, ce.s.1 + sb)
+        } else {
+            (ce.s.0 + c1 + pair, ce.s.1 + c2)
+        })
+    }
+
     /// The exact DP with pairwise costs: prefix-done states are kept per prefix id and core-done
     /// states per core id, so a token can pay mu2 x excess PMI of its (prefix, core) and
-    /// (core, suffix) pairs. Same arcs and costs as parse_x otherwise.
+    /// (core, suffix) pairs (and code_len's affix bits given the core). Same arcs and costs as
+    /// parse_x otherwise.
     fn parse_pair(&self, x: &[u32], sc: &mut Scratch, out: Option<&mut Vec<Tok>>, ban: Ban, extra: Option<&Extra>)
         -> (f64, f64) {
         let n = x.len();
-        let (delta, lam, mu, mu2, lamc) = (self.delta, self.lam, self.mu, self.mu2, self.lamc);
-        let (cc, cp, cs) = (&self.tabs[0].cost, &self.tabs[1].cost, &self.tabs[2].cost);
-        let (sp, ss) = (&self.tabs[1].spec, &self.tabs[2].spec);
+        self.pair_init(n, sc);
+        for i in 0..=n {
+            self.pair_step(x, i, sc, ban, extra);
+        }
+        self.pair_finish(x, sc, out)
+    }
+
+    /// parse_pair's DP state before position 0 of a text of n chars
+    fn pair_init(&self, n: usize, sc: &mut Scratch) {
         sc.bs.clear();
         sc.bs.resize(n + 1, INF);
         sc.bb.clear();
@@ -975,14 +2107,25 @@ impl<'a> Dict<'a> {
             sc.ce[i].clear();
         }
         sc.bs[0] = (0.0, 0.0);
-        let empty_p = (lam * cp[0] + mu * sp[0], cp[0]);
-        let empty_s = (lam * cs[0] + mu * ss[0], cs[0]);
-        for i in 0..=n {
+    }
+
+    /// Position i of parse_pair's DP: the empty closures at i, then every arc out of i (entries
+    /// at i are final afterwards; only positions > i get new relaxations)
+    #[inline(always)]
+    fn pair_step(&self, x: &[u32], i: usize, sc: &mut Scratch, ban: Ban, extra: Option<&Extra>) {
+        let n = x.len();
+        let (delta, lam, mu, lamc) = (self.delta, self.lam, self.mu, self.lamc);
+        let (cp, cs) = (&self.tabs[1].cost, &self.tabs[2].cost);
+        let (sp, ss) = (&self.tabs[1].spec, &self.tabs[2].spec);
+        // code_len: the bits of a token are paid where its pairs are known (the prefix's given the
+        // core with the core, the suffix's with the suffix): affix arcs carry no secondary cost,
+        // and every bit also costs w in the primary
+        let (cl, w) = (self.cl.on, self.cl.w);
+        let empty_p = (lam * cp[0] + mu * sp[0], if cl { 0.0 } else { cp[0] });
+        {
             // empty suffix: core-done -> between tokens
             for idx in 0..sc.ce[i].len() {
-                let e = sc.ce[i][idx];
-                let cond = if lamc > 0.0 { lamc * self.cond(1, e.cid, 0, (-cs[0]).exp2()) } else { 0.0 };
-                let c = (e.s.0 + empty_s.0 + cond, e.s.1 + empty_s.1);
+                let c = self.pair_close(&sc.ce[i][idx]);
                 if better(c, sc.bs[i]) {
                     sc.bs[i] = c;
                     sc.bb[i] = BBack { kind: 1, pos: i as u32, idx: idx as u32, sid: 0 };
@@ -990,125 +2133,139 @@ impl<'a> Dict<'a> {
             }
             let b = sc.bs[i];
             if !b.0.is_infinite() {
-                add_p(&mut sc.pe[i], PEnt { pid: 0, s: (b.0 + empty_p.0, b.1 + empty_p.1), from: i as u32 });
+                // (case_affixes: one entry per start state)
+                for vs in 0..if self.ca { NVS } else { 1 } {
+                    if self.ca && vs_start(TM_EMPTY) >> vs & 1 == 0 {
+                        continue;
+                    }
+                    add_p(&mut sc.pe[i], PEnt { pid: 0, vs: vs as u8, s: (b.0 + empty_p.0, b.1 + empty_p.1), from: i as u32 });
+                }
             }
             if i == n {
-                break;
+                return;
             }
             if !b.0.is_infinite() {
                 let nb = self.sym.byte_len(x[i]) as f64;
-                let c = (b.0 + nb * (1.0 + (lam + lamc) * (cp[0] + cs[0]) + mu * (sp[0] + ss[0])), b.1 + 1000.0 * nb);
+                let c = if cl {
+                    // (the secondary keeps the old 1000 per byte: a char core still wins every tie)
+                    (b.0 + nb * (1.0 + (lam + lamc) * (cp[0] + cs[0]) + mu * (sp[0] + ss[0]) + w * self.cl.byte), b.1 + 1000.0 * nb)
+                } else {
+                    (b.0 + nb * (1.0 + (lam + lamc) * (cp[0] + cs[0]) + mu * (sp[0] + ss[0])), b.1 + 1000.0 * nb)
+                };
                 if better(c, sc.bs[i + 1]) {
                     sc.bs[i + 1] = c;
                     sc.bb[i + 1] = BBack { kind: 2, pos: i as u32, idx: 0, sid: 0 };
                 }
-                let mut node = 0u32;
-                for j in i..n {
-                    let Some(m) = self.tries[1].step(node, x[j]) else { break };
-                    node = m;
-                    let r = self.tries[1].term(node);
-                    if self.usable(1, r, ban) {
-                        let e = PEnt {
-                            pid: r,
-                            s: (b.0 + delta + lam * cp[r as usize] + mu * sp[r as usize] + self.tabs[1].usec[r as usize], b.1 + cp[r as usize]),
-                            from: i as u32,
-                        };
-                        add_p(&mut sc.pe[j + 1], e);
+                if self.ca {
+                    let pe = &mut sc.pe;
+                    self.walk_ca(1, x, i, ban, |j, nd, tm| {
+                        let r = nd.term as usize;
+                        let s = (b.0 + delta + lam * cp[r] + mu * sp[r] + self.tabs[1].usec[r], b.1 + if cl { 0.0 } else { cp[r] });
+                        let m = vs_start(tm);
+                        for vs in 0..NVS {
+                            if m >> vs & 1 != 0 {
+                                add_p(&mut pe[j + 1], PEnt { pid: nd.term, vs: vs as u8, s, from: i as u32 });
+                            }
+                        }
+                    });
+                    if let Some(e) = extra.filter(|e| e.t == 1) {
+                        if let Some(tm) = self.extra_tm(x, i, e) {
+                            let s = (b.0 + delta + lam * e.cost + mu * e.spec + e.usec, b.1 + if cl { 0.0 } else { e.cost });
+                            let m = vs_start(tm);
+                            for vs in 0..NVS {
+                                if m >> vs & 1 != 0 {
+                                    add_p(&mut sc.pe[i + e.s.len()], PEnt { pid: EXTRA, vs: vs as u8, s, from: i as u32 });
+                                }
+                            }
+                        }
                     }
-                }
-                if let Some(e) = extra {
-                    let l = e.s.len();
-                    if e.t == 1 && i + l <= n && x[i..i + l] == e.s[..] {
-                        let pe = PEnt { pid: EXTRA, s: (b.0 + delta + lam * e.cost + mu * e.spec + e.usec, b.1 + e.cost), from: i as u32 };
-                        add_p(&mut sc.pe[i + l], pe);
+                } else {
+                    let mut node = 0u32;
+                    for j in if self.sym.mark_at(x[i]) { n..n } else { i..n } {
+                        let Some(m) = self.tries[1].step(node, x[j]) else { break };
+                        node = m;
+                        let r = self.tries[1].term(node);
+                        if self.usable(1, r, ban) {
+                            let e = PEnt {
+                                pid: r,
+                                vs: 0,
+                                s: (b.0 + delta + lam * cp[r as usize] + mu * sp[r as usize] + self.tabs[1].usec[r as usize], b.1 + if cl { 0.0 } else { cp[r as usize] }),
+                                from: i as u32,
+                            };
+                            add_p(&mut sc.pe[j + 1], e);
+                        }
+                    }
+                    if let Some(e) = extra {
+                        let l = e.s.len();
+                        if e.t == 1 && i + l <= n && x[i..i + l] == e.s[..] && !self.sym.mark_at(x[i]) {
+                            let pe = PEnt { pid: EXTRA, vs: 0, s: (b.0 + delta + lam * e.cost + mu * e.spec + e.usec, b.1 + if cl { 0.0 } else { e.cost }), from: i as u32 };
+                            add_p(&mut sc.pe[i + l], pe);
+                        }
                     }
                 }
             }
             if !sc.pe[i].is_empty() {
-                sc.cm.clear();
-                let mut node = 0u32;
-                let mut m = 0u8;
-                for j in i..n {
-                    let c = x[j];
-                    if is_byte(c) {
-                        break;
-                    }
-                    let Some(nn) = self.tries[0].step(node, self.sym.fold[c as usize]) else { break };
-                    node = nn;
-                    m = if j == i { self.sym.mask(c) } else { combine(m, self.sym.mask(c)) };
-                    let Some(v) = variation(m) else { break };
-                    let r = self.tries[0].term(node);
-                    if self.usable(0, r, ban) {
-                        sc.cm.push((j + 1, r, v as u8, 1.0 + self.tabs[0].usec[r as usize], cc[r as usize] + self.vcost[v]));
-                    }
-                }
-                if let Some(e) = extra {
-                    let l = e.s.len();
-                    if e.t == 0 && i + l <= n {
-                        let mut m = 0u8;
-                        let mut ok = true;
-                        for k in 0..l {
-                            let c = x[i + k];
-                            if is_byte(c) || self.sym.fold[c as usize] != e.s[k] {
-                                ok = false;
-                                break;
-                            }
-                            m = if k == 0 { self.sym.mask(c) } else { combine(m, self.sym.mask(c)) };
-                        }
-                        if let Some(v) = if ok { variation(m) } else { None } {
-                            sc.cm.push((i + l, EXTRA, v as u8, 1.0 + e.usec, e.cost + self.vcost[v]));
-                        }
-                    }
+                self.pair_core_arcs(x, i, ban, extra, &mut sc.cm);
+                // (core-done entries: (cid, vs) at k can only come from this position and this core
+                // arc, since cid fixes the length, so a slot per (arc, vs) finds an entry's index)
+                let wv = if self.ca { NVS } else { 1 };
+                sc.slot.clear();
+                sc.slot.resize(sc.cm.len() * wv, NONE);
+                if cl {
+                    sc.pbc.clear();
+                    sc.pbc.resize(sc.cm.len(), (NONE, 0.0));
                 }
                 for pidx in 0..sc.pe[i].len() {
                     let pe = sc.pe[i][pidx];
                     for q in 0..sc.cm.len() {
-                        let (k, cid, v, c1, c2) = sc.cm[q];
-                        let mut pair = mu2 * self.pmi_of(0, pe.pid, cid);
-                        if lamc > 0.0 {
-                            let qa = if pe.pid == EXTRA { (-extra.map_or(20.0, |e| e.cost)).exp2() } else { (-cp[pe.pid as usize]).exp2() };
-                            pair += lamc * self.cond(0, pe.pid, cid, qa);
+                        let arc = sc.cm[q];
+                        // (code_len: the prefix's bits once per prefix: its entries are consecutive)
+                        let pbc = &mut sc.pbc;
+                        let Some((v, vs, s)) = self.pair_ce(&pe, arc, extra, || {
+                            let pc = &mut pbc[q];
+                            if pc.0 != pe.pid {
+                                *pc = (pe.pid, self.pair_pb(pe.pid, arc.1, extra));
+                            }
+                            pc.1
+                        }) else {
+                            continue;
+                        };
+                        let (k, cid) = (arc.0, arc.1);
+                        let e = CEnt { cid, v, vs, s, fpos: i as u32, fidx: pidx as u32 };
+                        let sl = &mut sc.slot[q * wv + vs as usize];
+                        if *sl == NONE {
+                            *sl = sc.ce[k].len() as u32;
+                            sc.ce[k].push(e);
+                        } else {
+                            let o = &mut sc.ce[k][*sl as usize];
+                            if better(e.s, o.s) {
+                                *o = e;
+                            }
                         }
-                        let e = CEnt { cid, v, s: (pe.s.0 + c1 + pair, pe.s.1 + c2), fpos: i as u32, fidx: pidx as u32 };
-                        add_c(&mut sc.ce[k], e);
                     }
                 }
             }
             if !sc.ce[i].is_empty() {
-                sc.sm.clear();
-                let mut node = 0u32;
-                for j in i..n {
-                    let Some(m) = self.tries[2].step(node, x[j]) else { break };
-                    node = m;
-                    let r = self.tries[2].term(node);
-                    if self.usable(2, r, ban) {
-                        sc.sm.push((j + 1, r, delta + lam * cs[r as usize] + mu * ss[r as usize] + self.tabs[2].usec[r as usize], cs[r as usize]));
-                    }
-                }
-                if let Some(e) = extra {
-                    let l = e.s.len();
-                    if e.t == 2 && i + l <= n && x[i..i + l] == e.s[..] {
-                        sc.sm.push((i + l, EXTRA, delta + lam * e.cost + mu * e.spec + e.usec, e.cost));
-                    }
-                }
+                self.pair_suffix_arcs(x, i, ban, extra, &mut sc.sm);
                 for cidx in 0..sc.ce[i].len() {
                     let ce = sc.ce[i][cidx];
                     for q in 0..sc.sm.len() {
-                        let (j, sid, c1, c2) = sc.sm[q];
-                        let mut pair = mu2 * self.pmi_of(1, ce.cid, sid);
-                        if lamc > 0.0 {
-                            let qa = if sid == EXTRA { (-extra.map_or(20.0, |e| e.cost)).exp2() } else { (-cs[sid as usize]).exp2() };
-                            pair += lamc * self.cond(1, ce.cid, sid, qa);
-                        }
-                        let c = (ce.s.0 + c1 + pair, ce.s.1 + c2);
+                        let arc = sc.sm[q];
+                        let Some(c) = self.pair_bs(&ce, arc, extra) else { continue };
+                        let j = arc.0;
                         if better(c, sc.bs[j]) {
                             sc.bs[j] = c;
-                            sc.bb[j] = BBack { kind: 1, pos: i as u32, idx: cidx as u32, sid };
+                            sc.bb[j] = BBack { kind: 1, pos: i as u32, idx: cidx as u32, sid: arc.1 };
                         }
                     }
                 }
             }
         }
+    }
+
+    /// parse_pair's result after every position: the score, and the tokens into `out` if given
+    fn pair_finish(&self, x: &[u32], sc: &Scratch, out: Option<&mut Vec<Tok>>) -> (f64, f64) {
+        let n = x.len();
         let res = sc.bs[n];
         if let Some(out) = out {
             out.clear();
@@ -1142,9 +2299,23 @@ impl<'a> Dict<'a> {
     #[allow(clippy::too_many_arguments)]
     fn step_x<const BACK: bool>(&self, x: &[u32], i: usize, d: &mut [Vec<(f64, f64)>; 3], back: &mut [Vec<Back>; 3], off: usize,
                                 ban: Ban, extra: Option<&Extra>, close: bool, arcs: Option<&Arcs>) {
+        self.step_xp::<BACK>(x, i, d, back, off, ban, extra, close, arcs, |_| {});
+    }
+
+    /// step_x, calling probe(d) at the point where an extra row's arc out of i is relaxed (after the
+    /// closures and the byte arc, before the trie arcs; only if i < n)
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    fn step_xp<const BACK: bool>(&self, x: &[u32], i: usize, d: &mut [Vec<(f64, f64)>; 3], back: &mut [Vec<Back>; 3], off: usize,
+                                 ban: Ban, extra: Option<&Extra>, close: bool, arcs: Option<&Arcs>,
+                                 mut probe: impl FnMut(&[Vec<(f64, f64)>; 3])) {
+        if self.ca {
+            return self.step_xa::<BACK>(x, i, d, back, off, ban, extra, close, arcs, probe);
+        }
         let n = x.len();
         let (cp, cs) = (&self.tabs[1].cost, &self.tabs[2].cost);
-        let (delta, lam, mu) = (self.delta, self.lam, self.mu);
+        let (lam, mu, wu) = (self.lam, self.mu, self.cl.wu);
+        let (lam_a, wv) = (lam + wu, &self.cl.wv);
         let (sp, ss) = (&self.tabs[1].spec, &self.tabs[2].spec);
         let relax = |d: &mut [Vec<(f64, f64)>; 3], back: &mut [Vec<Back>; 3], s: usize, i: usize, t: usize, j: usize, dt: f64, dc: f64, id: u32, v: u8| {
             let o = d[s][i - off];
@@ -1155,14 +2326,14 @@ impl<'a> Dict<'a> {
             if better(c, d[t][j - off]) {
                 d[t][j - off] = c;
                 if BACK {
-                    back[t][j - off] = Back { state: s as u8, from: i as u32, id, v };
+                    back[t][j - off] = Back { state: s as u8, from: i as u32, id, v, fvs: 0 };
                 }
             }
         };
         if close {
             // empty closure, order C -> B -> P
-            relax(d, back, 2, i, 0, i, lam * cs[0] + mu * ss[0], cs[0], 0, 0);
-            relax(d, back, 0, i, 1, i, lam * cp[0] + mu * sp[0], cp[0], 0, 0);
+            relax(d, back, 2, i, 0, i, lam_a * cs[0] + mu * ss[0], cs[0], 0, 0);
+            relax(d, back, 0, i, 1, i, lam_a * cp[0] + mu * sp[0], cp[0], 0, 0);
         }
         if i == n {
             return;
@@ -1170,31 +2341,23 @@ impl<'a> Dict<'a> {
         // byte fallback: each byte token pays what a token with empty affixes pays, and a high
         // secondary cost, so a char core always wins a tie
         let nb = self.sym.byte_len(x[i]) as f64;
-        relax(d, back, 0, i, 0, i + 1, nb * (1.0 + lam * (cp[0] + cs[0]) + mu * (sp[0] + ss[0])), 1000.0 * nb, NONE, 0);
+        let byte_w = if wu == 0.0 { 0.0 } else { wu * self.cl.byte };
+        relax(d, back, 0, i, 0, i + 1, nb * (1.0 + lam * (cp[0] + cs[0]) + mu * (sp[0] + ss[0]) + byte_w), 1000.0 * nb, NONE, 0);
         if let Some(e) = extra {
             let l = e.s.len();
             if i + l <= n {
-                if e.t == 1 && x[i..i + l] == e.s[..] {
-                    relax(d, back, 0, i, 1, i + l, delta + lam * e.cost + mu * e.spec + e.usec, e.cost, EXTRA, 0);
+                if e.t == 1 && x[i..i + l] == e.s[..] && !self.sym.mark_at(x[i]) {
+                    relax(d, back, 0, i, 1, i + l, self.extra_affix_prim(e), e.cost, EXTRA, 0);
                 } else if e.t == 2 && x[i..i + l] == e.s[..] {
-                    relax(d, back, 2, i, 0, i + l, delta + lam * e.cost + mu * e.spec + e.usec, e.cost, EXTRA, 0);
+                    relax(d, back, 2, i, 0, i + l, self.extra_affix_prim(e), e.cost, EXTRA, 0);
                 } else if e.t == 0 {
-                    let mut m = 0u8;
-                    let mut ok = true;
-                    for k in 0..l {
-                        let c = x[i + k];
-                        if is_byte(c) || self.sym.fold[c as usize] != e.s[k] {
-                            ok = false;
-                            break;
-                        }
-                        m = if k == 0 { self.sym.mask(c) } else { combine(m, self.sym.mask(c)) };
-                    }
-                    if let Some(v) = if ok { variation(m) } else { None } {
-                        relax(d, back, 1, i, 2, i + l, 1.0 + e.usec, e.cost + self.vcost[v], EXTRA, v as u8);
+                    if let Some(v) = self.extra_core_var(x, i, e) {
+                        relax(d, back, 1, i, 2, i + l, self.extra_core_prim(e, v), e.cost + self.vcost[v], EXTRA, v as u8);
                     }
                 }
             }
         }
+        probe(d);
         if let Some(a) = arcs {
             // the arcs of the walks below, recorded by arcs_x (same order, same sums)
             debug_assert!(!BACK);
@@ -1215,7 +2378,7 @@ impl<'a> Dict<'a> {
         // trie walks from i (prefixes B -> P, cores P -> C, suffixes C -> B): the walk's source
         // score cannot change during it, so it is read once; the sums are those of relax
         let o = d[0][i - off];
-        if !o.0.is_infinite() {
+        if !o.0.is_infinite() && !self.sym.mark_at(x[i]) {
             let tr = &self.tries[1];
             let (dt, bt) = (&mut d[1], &mut back[1]);
             let mut node = 0u32;
@@ -1228,7 +2391,7 @@ impl<'a> Dict<'a> {
                     if better(c, dt[j + 1 - off]) {
                         dt[j + 1 - off] = c;
                         if BACK {
-                            bt[j + 1 - off] = Back { state: 0, from: i as u32, id: nd.term, v: 0 };
+                            bt[j + 1 - off] = Back { state: 0, from: i as u32, id: nd.term, v: 0, fvs: 0 };
                         }
                     }
                 }
@@ -1236,30 +2399,17 @@ impl<'a> Dict<'a> {
         }
         let o = d[1][i - off];
         if !o.0.is_infinite() {
-            let tr = &self.tries[0];
             let (dt, bt) = (&mut d[2], &mut back[2]);
-            let mut node = 0u32;
-            let mut m = 0u8;
-            for j in i..n {
-                let c = x[j];
-                if is_byte(c) {
-                    break;
-                }
-                let Some(nn) = tr.step(node, self.sym.fold[c as usize]) else { break };
-                node = nn;
-                m = if j == i { self.sym.mask(c) } else { combine(m, self.sym.mask(c)) };
-                let Some(v) = variation(m) else { break };
-                let nd = &tr.node[node as usize];
-                if self.usable(0, nd.term, ban) {
-                    let c = (o.0 + nd.arc.0, o.1 + (nd.arc.1 + self.vcost[v]));
-                    if better(c, dt[j + 1 - off]) {
-                        dt[j + 1 - off] = c;
-                        if BACK {
-                            bt[j + 1 - off] = Back { state: 1, from: i as u32, id: nd.term, v: v as u8 };
-                        }
+            self.core_walk(x, i, ban, |j, nd, v| {
+                let a0 = if wu == 0.0 { nd.arc.0 } else { nd.arc.0 + wv[v] };
+                let c = (o.0 + a0, o.1 + (nd.arc.1 + self.vcost[v]));
+                if better(c, dt[j + 1 - off]) {
+                    dt[j + 1 - off] = c;
+                    if BACK {
+                        bt[j + 1 - off] = Back { state: 1, from: i as u32, id: nd.term, v: v as u8, fvs: 0 };
                     }
                 }
-            }
+            });
         }
         let o = d[2][i - off];
         if !o.0.is_infinite() {
@@ -1275,7 +2425,7 @@ impl<'a> Dict<'a> {
                     if better(c, dt[j + 1 - off]) {
                         dt[j + 1 - off] = c;
                         if BACK {
-                            bt[j + 1 - off] = Back { state: 2, from: i as u32, id: nd.term, v: 0 };
+                            bt[j + 1 - off] = Back { state: 2, from: i as u32, id: nd.term, v: 0, fvs: 0 };
                         }
                     }
                 }
@@ -1283,17 +2433,174 @@ impl<'a> Dict<'a> {
         }
     }
 
+    /// step_x with case_affixes: the same DP, with the scores of states 1 and 2 kept per variation
+    /// state (slot q x NVS + vs, see wid). A prefix (empty: every start state) moves a token start
+    /// into the states its transition mask allows, a core and then a suffix must allow the state
+    /// they follow; the variation cost is paid on the core arc, as in step_x. Every arc's states
+    /// are visited in increasing order after the arc itself, the same with or without `arcs`, so
+    /// parse_x_window's replay adds up exactly as the walks do.
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    fn step_xa<const BACK: bool>(&self, x: &[u32], i: usize, d: &mut [Vec<(f64, f64)>; 3], back: &mut [Vec<Back>; 3], off: usize,
+                                 ban: Ban, extra: Option<&Extra>, close: bool, arcs: Option<&Arcs>,
+                                 mut probe: impl FnMut(&[Vec<(f64, f64)>; 3])) {
+        let n = x.len();
+        let (cp, cs) = (&self.tabs[1].cost, &self.tabs[2].cost);
+        let (lam, mu, wu) = (self.lam, self.mu, self.cl.wu);
+        let (lam_a, wv) = (lam + wu, &self.cl.wv);
+        let (sp, ss) = (&self.tabs[1].spec, &self.tabs[2].spec);
+        let q = i - off;
+        let at = |s: usize, q: usize, vs: usize| if s == 0 { q } else { q * NVS + vs };
+        #[inline(always)]
+        fn upd<const B: bool>(d: &mut [(f64, f64)], back: &mut [Back], k: usize, c: (f64, f64), b: Back) {
+            if better(c, d[k]) {
+                d[k] = c;
+                if B {
+                    back[k] = b;
+                }
+            }
+        }
+        let relax = |d: &mut [Vec<(f64, f64)>; 3], back: &mut [Vec<Back>; 3], s: usize, vs: usize, t: usize, tv: usize, j: usize, dt: f64, dc: f64, id: u32, v: u8| {
+            let o = d[s][at(s, q, vs)];
+            if o.0.is_infinite() {
+                return;
+            }
+            let k = at(t, j - off, tv);
+            upd::<BACK>(&mut d[t], &mut back[t], k, (o.0 + dt, o.1 + dc), Back { state: s as u8, from: i as u32, id, v, fvs: vs as u8 });
+        };
+        if close {
+            // empty closure, order C -> B -> P
+            for vs in 0..NVS {
+                relax(d, back, 2, vs, 0, 0, i, lam_a * cs[0] + mu * ss[0], cs[0], 0, 0);
+            }
+            for vs in 0..NVS {
+                if vs_start(TM_EMPTY) >> vs & 1 != 0 {
+                    relax(d, back, 0, 0, 1, vs, i, lam_a * cp[0] + mu * sp[0], cp[0], 0, 0);
+                }
+            }
+        }
+        if i == n {
+            return;
+        }
+        let nb = self.sym.byte_len(x[i]) as f64;
+        let byte_w = if wu == 0.0 { 0.0 } else { wu * self.cl.byte };
+        relax(d, back, 0, 0, 0, 0, i + 1, nb * (1.0 + lam * (cp[0] + cs[0]) + mu * (sp[0] + ss[0]) + byte_w), 1000.0 * nb, NONE, 0);
+        if let Some(e) = extra {
+            if let Some(tm) = self.extra_tm(x, i, e) {
+                let j = i + e.s.len();
+                let affix = self.extra_affix_prim(e);
+                let (start, allow) = (vs_start(tm), vs_allow(tm));
+                for vs in 0..NVS {
+                    if (if e.t == 1 { start } else { allow }) >> vs & 1 == 0 {
+                        continue;
+                    }
+                    match e.t {
+                        1 => relax(d, back, 0, 0, 1, vs, j, affix, e.cost, EXTRA, 0),
+                        2 => relax(d, back, 2, vs, 0, 0, j, affix, e.cost, EXTRA, 0),
+                        0 => {
+                            let v = vs_var(vs);
+                            relax(d, back, 1, vs, 2, vs_to(vs, tm), j, self.extra_core_prim(e, v), e.cost + self.vcost[v], EXTRA, v as u8);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        probe(d);
+        // prefixes B -> P
+        let o = d[0][q];
+        if !o.0.is_infinite() {
+            let (dt, bt) = (&mut d[1], &mut back[1]);
+            let mut arc = |j1: usize, a0: f64, a1: f64, tm: u8, id: u32| {
+                let c = (o.0 + a0, o.1 + a1);
+                let m = vs_start(tm);
+                for vs in 0..NVS {
+                    if m >> vs & 1 != 0 {
+                        upd::<BACK>(dt, bt, at(1, j1 - off, vs), c, Back { state: 0, from: i as u32, id, v: 0, fvs: 0 });
+                    }
+                }
+            };
+            if let Some(a) = arcs {
+                for (&(j1, a0, a1), &tm) in a.get(i, 0).iter().zip(a.get_tm(i, 0)) {
+                    arc(j1 as usize, a0, a1, tm, 0);
+                }
+            } else {
+                self.walk_ca(1, x, i, ban, |j, nd, tm| arc(j + 1, nd.arc.0, nd.arc.1, tm, nd.term));
+            }
+        }
+        // cores P -> C
+        let src: [(f64, f64); NVS] = std::array::from_fn(|vs| d[1][at(1, q, vs)]);
+        if src.iter().any(|o| !o.0.is_infinite()) {
+            let (dt, bt) = (&mut d[2], &mut back[2]);
+            let mut arc = |j1: usize, a0: f64, a1: f64, tm: u8, id: u32| {
+                let m = vs_allow(tm);
+                for vs in 0..NVS {
+                    let o = src[vs];
+                    if m >> vs & 1 != 0 && !o.0.is_infinite() {
+                        let v = vs_var(vs);
+                        let c = (o.0 + if wu == 0.0 { a0 } else { a0 + wv[v] }, o.1 + (a1 + self.vcost[v]));
+                        upd::<BACK>(dt, bt, at(2, j1 - off, vs_to(vs, tm)), c, Back { state: 1, from: i as u32, id, v: v as u8, fvs: vs as u8 });
+                    }
+                }
+            };
+            if let Some(a) = arcs {
+                for (&(j1, a0, a1), &tm) in a.get(i, 1).iter().zip(a.get_tm(i, 1)) {
+                    arc(j1 as usize, a0, a1, tm, 0);
+                }
+            } else {
+                self.walk_ca(0, x, i, ban, |j, nd, tm| arc(j + 1, nd.arc.0, nd.arc.1, tm, nd.term));
+            }
+        }
+        // suffixes C -> B
+        let src: [(f64, f64); NVS] = std::array::from_fn(|vs| d[2][at(2, q, vs)]);
+        if src.iter().any(|o| !o.0.is_infinite()) {
+            let (dt, bt) = (&mut d[0], &mut back[0]);
+            let mut arc = |j1: usize, a0: f64, a1: f64, tm: u8, id: u32| {
+                let m = vs_allow(tm);
+                for vs in 0..NVS {
+                    let o = src[vs];
+                    if m >> vs & 1 != 0 && !o.0.is_infinite() {
+                        upd::<BACK>(dt, bt, j1 - off, (o.0 + a0, o.1 + a1), Back { state: 2, from: i as u32, id, v: 0, fvs: vs as u8 });
+                    }
+                }
+            };
+            if let Some(a) = arcs {
+                for (&(j1, a0, a1), &tm) in a.get(i, 2).iter().zip(a.get_tm(i, 2)) {
+                    arc(j1 as usize, a0, a1, tm, 0);
+                }
+            } else {
+                self.walk_ca(2, x, i, ban, |j, nd, tm| arc(j + 1, nd.arc.0, nd.arc.1, tm, nd.term));
+            }
+        }
+    }
+
     /// Every arc of step_x's trie walks in x (no ban), whatever the source scores: per position and
-    /// walk, (target, primary, secondary) in walk order, as step_x adds them.
+    /// walk, (target, primary, secondary) in walk order, as step_x adds them (case_affixes: the
+    /// core arcs without the variation cost, and every arc's transition mask in a.tm).
     fn arcs_x(&self, x: &[u32], a: &mut Arcs) {
         let n = x.len();
         a.start.clear();
         a.arcs.clear();
+        a.tm.clear();
+        if self.ca {
+            for i in 0..n {
+                for k in [1, 0, 2] {
+                    a.start.push(a.arcs.len() as u32);
+                    let (arcs, tms) = (&mut a.arcs, &mut a.tm);
+                    self.walk_ca(k, x, i, None, |j, nd, tm| {
+                        arcs.push(((j + 1) as u32, nd.arc.0, nd.arc.1));
+                        tms.push(tm);
+                    });
+                }
+            }
+            a.start.push(a.arcs.len() as u32);
+            return;
+        }
         for i in 0..n {
             a.start.push(a.arcs.len() as u32);
             let tr = &self.tries[1];
             let mut node = 0u32;
-            for j in i..n {
+            for j in if self.sym.mark_at(x[i]) { n..n } else { i..n } {
                 let Some(m) = tr.step(node, x[j]) else { break };
                 node = m;
                 let nd = &tr.node[node as usize];
@@ -1302,23 +2609,11 @@ impl<'a> Dict<'a> {
                 }
             }
             a.start.push(a.arcs.len() as u32);
-            let tr = &self.tries[0];
-            let mut node = 0u32;
-            let mut m = 0u8;
-            for j in i..n {
-                let c = x[j];
-                if is_byte(c) {
-                    break;
-                }
-                let Some(nn) = tr.step(node, self.sym.fold[c as usize]) else { break };
-                node = nn;
-                m = if j == i { self.sym.mask(c) } else { combine(m, self.sym.mask(c)) };
-                let Some(v) = variation(m) else { break };
-                let nd = &tr.node[node as usize];
-                if self.usable(0, nd.term, None) {
-                    a.arcs.push(((j + 1) as u32, nd.arc.0, nd.arc.1 + self.vcost[v]));
-                }
-            }
+            let arcs = &mut a.arcs;
+            let (wu, wv) = (self.cl.wu, &self.cl.wv);
+            self.core_walk(x, i, None, |j, nd, v| {
+                arcs.push(((j + 1) as u32, if wu == 0.0 { nd.arc.0 } else { nd.arc.0 + wv[v] }, nd.arc.1 + self.vcost[v]))
+            });
             a.start.push(a.arcs.len() as u32);
             let tr = &self.tries[2];
             let mut node = 0u32;
@@ -1340,18 +2635,12 @@ impl<'a> Dict<'a> {
         let n = x.len();
         for s in 0..3 {
             d[s].clear();
-            d[s].resize(n + 1, INF);
+            d[s].resize((n + 1) * self.wid(s), INF);
         }
         d[0][0] = (0.0, 0.0);
         for i in 0..=n {
             self.step_x::<false>(x, i, d, nob, 0, None, None, true, Some(a));
         }
-    }
-
-    /// Longest arc of parse_x under the live rows (trie matches, a byte) plus a row of length l.
-    fn max_arc(&self, l: usize) -> usize {
-        let live = |k: usize| (0..self.tabs[k].strs.len()).filter(|&i| self.tabs[k].alive[i]).map(|i| self.tabs[k].strs[i].len()).max().unwrap_or(0);
-        (0..3).map(live).max().unwrap_or(0).max(l).max(1)
     }
 
     /// parse_x(x, extra = e).0 (no ban, parse_x's variant only: mu2 = lamc = 0), computed from x's
@@ -1370,7 +2659,13 @@ impl<'a> Dict<'a> {
                       w: &mut [Vec<(f64, f64)>; 3], nob: &mut [Vec<Back>; 3]) -> f64 {
         let n = x.len();
         let same = |w: &[Vec<(f64, f64)>; 3], p: usize, off: usize| {
-            (0..3).all(|s| w[s][p - off].0.to_bits() == fin[s][p].0.to_bits() && w[s][p - off].1.to_bits() == fin[s][p].1.to_bits())
+            (0..3).all(|s| {
+                let k = self.wid(s);
+                (0..k).all(|v| {
+                    let (a, b) = (w[s][(p - off) * k + v], fin[s][p * k + v]);
+                    a.0.to_bits() == b.0.to_bits() && a.1.to_bits() == b.1.to_bits()
+                })
+            })
         };
         let mut k = 0;
         while k < occ.len() {
@@ -1380,7 +2675,7 @@ impl<'a> Dict<'a> {
             let mut end = (a + lmax).min(n);
             for s in 0..3 {
                 w[s].clear();
-                w[s].resize(end - off + 1, INF);
+                w[s].resize((end - off + 1) * self.wid(s), INF);
             }
             if off == 0 {
                 w[0][0] = (0.0, 0.0); // the start state, as parse_x seeds it
@@ -1388,7 +2683,8 @@ impl<'a> Dict<'a> {
             // pending scores at time a: the plain arcs out of [off, a), from their final scores
             for i in off..a {
                 for s in 0..3 {
-                    w[s][i - off] = fin[s][i];
+                    let k = self.wid(s);
+                    w[s][(i - off) * k..(i - off + 1) * k].copy_from_slice(&fin[s][i * k..(i + 1) * k]);
                 }
                 self.step_x::<false>(x, i, w, nob, off, None, None, false, Some(arcs));
             }
@@ -1400,7 +2696,7 @@ impl<'a> Dict<'a> {
                 let want = (i + lmax).min(n);
                 if want > end {
                     for s in 0..3 {
-                        w[s].resize(want - off + 1, INF);
+                        w[s].resize((want - off + 1) * self.wid(s), INF);
                     }
                     end = want;
                 }
@@ -1422,17 +2718,85 @@ impl<'a> Dict<'a> {
         fin[0][n].0
     }
 
+    /// Would the arcs of extra row e out of i (i < n) change any score, given the scores d at the
+    /// point where step_x relaxes them (see step_xp)? Exactly step_x's relaxations of e's arcs, as a
+    /// test: while none of them wins, none changes anything (a later one into the same entry then
+    /// meets the same score as the first).
+    fn extra_wins(&self, x: &[u32], i: usize, d: &[Vec<(f64, f64)>; 3], off: usize, e: &Extra) -> bool {
+        let n = x.len();
+        let q = i - off;
+        let win = |s: usize, si: usize, t: usize, ti: usize, dt: f64, dc: f64| {
+            let o = d[s][si];
+            !o.0.is_infinite() && better((o.0 + dt, o.1 + dc), d[t][ti])
+        };
+        if self.ca {
+            if let Some(tm) = self.extra_tm(x, i, e) {
+                let j = i + e.s.len();
+                let affix = self.extra_affix_prim(e);
+                let (start, allow) = (vs_start(tm), vs_allow(tm));
+                for vs in 0..NVS {
+                    if (if e.t == 1 { start } else { allow }) >> vs & 1 == 0 {
+                        continue;
+                    }
+                    let w = match e.t {
+                        1 => win(0, q, 1, (j - off) * NVS + vs, affix, e.cost),
+                        2 => win(2, q * NVS + vs, 0, j - off, affix, e.cost),
+                        0 => {
+                            let v = vs_var(vs);
+                            win(1, q * NVS + vs, 2, (j - off) * NVS + vs_to(vs, tm), self.extra_core_prim(e, v), e.cost + self.vcost[v])
+                        }
+                        _ => false,
+                    };
+                    if w {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        let l = e.s.len();
+        if i + l <= n {
+            let affix = self.extra_affix_prim(e);
+            if e.t == 1 && x[i..i + l] == e.s[..] && !self.sym.mark_at(x[i]) {
+                return win(0, q, 1, i + l - off, affix, e.cost);
+            } else if e.t == 2 && x[i..i + l] == e.s[..] {
+                return win(2, q, 0, i + l - off, affix, e.cost);
+            } else if e.t == 0 {
+                if let Some(v) = self.extra_core_var(x, i, e) {
+                    return win(1, q, 2, i + l - off, self.extra_core_prim(e, v), e.cost + self.vcost[v]);
+                }
+            }
+        }
+        false
+    }
+
     fn parse_x(&self, x: &[u32], sc: &mut Scratch, out: Option<&mut Vec<Tok>>, ban: Ban, extra: Option<&Extra>)
         -> (f64, f64) {
-        if self.mu2 > 0.0 || self.lamc > 0.0 {
+        if self.mu2 > 0.0 || self.lamc > 0.0 || self.cl.on {
             return self.parse_pair(x, sc, out, ban, extra);
         }
         let n = x.len();
+        if out.is_none() {
+            // scores only: the same DP without backpointers (they never change a score)
+            for k in 0..3 {
+                sc.d[k].clear();
+                sc.d[k].resize((n + 1) * self.wid(k), INF);
+            }
+            sc.d[0][0] = (0.0, 0.0);
+            for i in 0..=n {
+                self.step_x::<false>(x, i, &mut sc.d, &mut sc.back, 0, ban, extra, true, None);
+            }
+            return sc.d[0][n];
+        }
         for k in 0..3 {
             sc.d[k].clear();
-            sc.d[k].resize(n + 1, INF);
-            sc.back[k].clear();
-            sc.back[k].resize(n + 1, Back { state: 9, from: 0, id: 0, v: 0 });
+            sc.d[k].resize((n + 1) * self.wid(k), INF);
+            // (backpointers are not reset: the backtrace only reads entries with a finite score,
+            // and every one of those was written by this parse)
+            let need = (n + 1) * self.wid(k);
+            if sc.back[k].len() < need {
+                sc.back[k].resize(need, Back { state: 9, from: 0, id: 0, v: 0, fvs: 0 });
+            }
         }
         sc.d[0][0] = (0.0, 0.0);
         for i in 0..=n {
@@ -1445,10 +2809,11 @@ impl<'a> Dict<'a> {
                 return res;
             }
             // backtrace: labels come in suffix, core, prefix order (reversed)
-            let (mut st, mut pos) = (0usize, n);
+            // (case_affixes: an entry of state 1 or 2 is also indexed by its variation state vs)
+            let (mut st, mut pos, mut vs) = (0usize, n, 0usize);
             let mut cur = Tok { v: 0, p: 0, c: NONE, s: 0 };
             while !(st == 0 && pos == 0) {
-                let b = sc.back[st][pos];
+                let b = sc.back[st][pos * self.wid(st) + vs];
                 match (b.state, st) {
                     (0, 0) => {
                         // byte fallback: one unit per char, v = its number of byte tokens
@@ -1468,17 +2833,173 @@ impl<'a> Dict<'a> {
                 }
                 st = b.state as usize;
                 pos = b.from as usize;
+                vs = b.fvs as usize;
             }
             out.reverse();
         }
         res
     }
 
+    /// An upper bound on the length of any arc of x (the longest path of any trie from any position,
+    /// walked as the parses walk it; at least 1, a byte)
+    fn longest_arc(&self, x: &[u32]) -> usize {
+        let mut m = 1;
+        for i in 0..x.len() {
+            for k in 0..3 {
+                let fold = k == 0 || self.ca;
+                let (mut node, mut l) = (0u32, 0usize);
+                for &c in &x[i..] {
+                    if is_byte(c) {
+                        break;
+                    }
+                    let Some(nn) = self.tries[k].step(node, if fold { self.sym.fold[c as usize] } else { c }) else { break };
+                    node = nn;
+                    l += 1;
+                }
+                m = m.max(l);
+            }
+        }
+        m
+    }
+
+    /// Does extra row e have an arc out of x[i..] (parse_pair / extra_pair_wins' test)?
+    fn extra_fits(&self, x: &[u32], i: usize, e: &Extra) -> bool {
+        let l = e.s.len();
+        if i + l > x.len() {
+            return false;
+        }
+        if self.ca {
+            return self.extra_tm(x, i, e).is_some();
+        }
+        match e.t {
+            0 => self.extra_core_var(x, i, e).is_some(),
+            1 => x[i..i + l] == e.s[..] && !self.sym.mark_at(x[i]),
+            _ => x[i..i + l] == e.s[..],
+        }
+    }
+
+    /// code_len's re-scoring filter: would extra row e change parse_pair(x)'s score? `sc` holds
+    /// the plain parse_pair(x) (no ban, no extra) just run, i.e. every entry's final value. The
+    /// DP with e differs from the plain one only through e's own entries (new keys: a prefix-done
+    /// entry of e, a core-done entry of an extra core, or of a (core, state) the plain parse never
+    /// reached) and through what they relax: an existing core-done entry, or a B score. So e's
+    /// arcs are replayed at each of its occurrences, exactly as parse_pair relaxes them (same
+    /// helpers), against the plain final values: while none is better, the DP with e ends with the
+    /// plain parse's scores (up to ties within better's 1e-9). Conservative: any win (even one a
+    /// later plain entry would undo) sends the segment to a full parse with e.
+    fn extra_pair_wins(&self, x: &[u32], sc: &Scratch, e: &Extra, cm: &mut Vec<(usize, u32, u8, f64, f64)>,
+                       sm: &mut Vec<(usize, u32, f64, f64, u8)>) -> bool {
+        let n = x.len();
+        let l = e.s.len();
+        let (delta, lam, mu) = (self.delta, self.lam, self.mu);
+        let ex = Some(e);
+        // a new core-done entry at k: does it improve a B score (empty suffix, or a suffix arc)?
+        let private_ce = |ce: &CEnt, k: usize, sm: &mut Vec<(usize, u32, f64, f64, u8)>| -> bool {
+            if better(self.pair_close(ce), sc.bs[k]) {
+                return true;
+            }
+            if k < n {
+                self.pair_suffix_arcs(x, k, None, ex, sm);
+                for &arc in sm.iter() {
+                    if self.pair_bs(ce, arc, ex).is_some_and(|c| better(c, sc.bs[arc.0])) {
+                        return true;
+                    }
+                }
+            }
+            false
+        };
+        for i in 0..n {
+            if i + l > n {
+                break;
+            }
+            // e's arcs out of i, exactly as parse_pair makes them
+            let fits = if self.ca {
+                self.extra_tm(x, i, e).is_some()
+            } else {
+                match e.t {
+                    0 => self.extra_core_var(x, i, e).is_some(),
+                    1 => x[i..i + l] == e.s[..] && !self.sym.mark_at(x[i]),
+                    _ => x[i..i + l] == e.s[..],
+                }
+            };
+            if !fits {
+                continue;
+            }
+            match e.t {
+                1 => {
+                    // e's prefix-done entries at a = i + l, then every core arc out of a
+                    let b = sc.bs[i];
+                    if b.0.is_infinite() {
+                        continue;
+                    }
+                    let s = (b.0 + delta + lam * e.cost + mu * e.spec + e.usec, b.1 + if self.cl.on { 0.0 } else { e.cost });
+                    let states: u16 = if self.ca { vs_start(self.extra_tm(x, i, e).unwrap()) } else { 1 };
+                    let a = i + l;
+                    if a == n {
+                        continue; // (no core arc leaves the end)
+                    }
+                    self.pair_core_arcs(x, a, None, ex, cm);
+                    for vs in 0..if self.ca { NVS } else { 1 } {
+                        if states >> vs & 1 == 0 {
+                            continue;
+                        }
+                        let pe = PEnt { pid: EXTRA, vs: vs as u8, s, from: i as u32 };
+                        for &arc in cm.iter() {
+                            let Some((v, vs2, c)) = self.pair_ce(&pe, arc, ex, || self.pair_pb(EXTRA, arc.1, ex)) else { continue };
+                            let k = arc.0;
+                            match sc.ce[k].iter().find(|o| o.cid == arc.1 && o.vs == vs2) {
+                                Some(o) => {
+                                    if better(c, o.s) {
+                                        return true;
+                                    }
+                                }
+                                None => {
+                                    let ce = CEnt { cid: arc.1, v, vs: vs2, s: c, fpos: 0, fidx: 0 };
+                                    if private_ce(&ce, k, sm) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                0 => {
+                    // e's core-done entries (new keys) from every plain prefix-done entry at i
+                    self.pair_core_arcs(x, i, None, ex, cm);
+                    let Some(&arc) = cm.iter().find(|a| a.1 == EXTRA) else { continue };
+                    for pe in &sc.pe[i] {
+                        let Some((v, vs2, c)) = self.pair_ce(pe, arc, ex, || self.pair_pb(pe.pid, EXTRA, ex)) else { continue };
+                        let ce = CEnt { cid: EXTRA, v, vs: vs2, s: c, fpos: 0, fidx: 0 };
+                        if private_ce(&ce, arc.0, sm) {
+                            return true;
+                        }
+                    }
+                }
+                _ => {
+                    // e's suffix arc from every plain core-done entry at i
+                    self.pair_suffix_arcs(x, i, None, ex, sm);
+                    let Some(&arc) = sm.iter().find(|a| a.1 == EXTRA) else { continue };
+                    for ce in &sc.ce[i] {
+                        if self.pair_bs(ce, arc, ex).is_some_and(|c| better(c, sc.bs[arc.0])) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// the text of a token (prefix, written core, suffix) into x
     fn token_text_into(&self, t: &Tok, x: &mut Vec<u32>) {
         x.clear();
+        if self.ca {
+            let part = |k: usize, r: u32| (&self.tabs[k].strs[r as usize][..], self.tabs[k].umask[r as usize]);
+            self.write_parts(&[part(1, t.p), part(0, t.c), part(2, t.s)], true, t.v, x);
+            return;
+        }
         x.extend_from_slice(&self.tabs[1].strs[t.p as usize]);
-        x.extend(self.sym.written(&self.tabs[0].strs[t.c as usize], t.v));
+        self.write_core(t.c as usize, t.v, x);
         x.extend_from_slice(&self.tabs[2].strs[t.s as usize]);
     }
 }
@@ -1490,16 +3011,46 @@ struct Corpus {
     freqs: Vec<f64>,
 }
 
+/// Frequency-weighted sample (sample_t = t): every segment with count >= t is kept as it is; one
+/// with count f < t is kept with probability f / t and then counts t (inverse inclusion
+/// probability), so every sum over the corpus keeps its expectation while the long tail of rare
+/// segments, which dominates the parse work, shrinks by about t. Inclusion is a fixed hash of the
+/// segment's text, so it does not depend on segment order.
+fn sample_corpus(c: &Corpus, t: f64) -> Corpus {
+    let (mut segs, mut freqs) = (Vec::new(), Vec::new());
+    for (s, &f) in c.segs.iter().zip(&c.freqs) {
+        if f >= t {
+            segs.push(s.clone());
+            freqs.push(f);
+        } else if ((seq_hash(s.iter().copied()) >> 11) as f64 / (1u64 << 53) as f64) < f / t {
+            segs.push(s.clone());
+            freqs.push(t);
+        }
+    }
+    Corpus { segs, freqs }
+}
+
 struct ParseStats {
     tokens: f64,
     cost: f64,
     seg: Vec<f64>, // primary cost of every segment (only when types are collected)
     use_: [Vec<f64>; 3],
-    v: [f64; 4],
+    v: [f64; NVAR_MAX],
     types: HashMap<Tok, f64, Fast>,
+    bytes: f64, // byte-fallback tokens (one per UTF-8 byte)
 }
 
+/// per block of parse_corpus: primary cost of every segment, token ends, tokens
+type Parsed = (Vec<f64>, Vec<u32>, Vec<Tok>);
+/// parse_corpus's block size (segments)
+const PC_BLOCK: usize = 512;
+
 fn parse_corpus(d: &Dict, c: &Corpus, threads: usize, want_types: bool) -> ParseStats {
+    parse_corpus_k(d, c, threads, want_types, false).0
+}
+
+/// parse_corpus, also returning every block's tokens if `keep` (prune_reuse)
+fn parse_corpus_k(d: &Dict, c: &Corpus, threads: usize, want_types: bool, keep: bool) -> (ParseStats, Option<Vec<Parsed>>) {
     // The statistics are those of `threads` fixed ranges of segments, each accumulated in order and
     // then merged in range order (sums and the types map, whose iteration order later steps
     // depend on, come out bit-identical to one thread per range). The parsing itself runs on small
@@ -1507,7 +3058,7 @@ fn parse_corpus(d: &Dict, c: &Corpus, threads: usize, want_types: bool) -> Parse
     // soon as all its blocks are parsed, and merged by this thread while the others still parse.
     let n = c.segs.len();
     let threads = threads.max(1);
-    const B: usize = 512;
+    const B: usize = PC_BLOCK;
     let nb = n.div_ceil(B);
     let chunk = n.div_ceil(threads).max(1);
     let range = |t: usize| (t * chunk).min(n)..((t + 1) * chunk).min(n);
@@ -1515,19 +3066,19 @@ fn parse_corpus(d: &Dict, c: &Corpus, threads: usize, want_types: bool) -> Parse
         let r = range(t);
         if r.is_empty() { 0..0 } else { r.start / B..r.end.div_ceil(B) }
     };
-    type Parsed = (Vec<f64>, Vec<u32>, Vec<Tok>); // per block: primary costs, token ends, tokens
     let slots: Vec<std::sync::OnceLock<Parsed>> = (0..nb).map(|_| std::sync::OnceLock::new()).collect();
-    let left: Vec<std::sync::atomic::AtomicUsize> = (0..threads).map(|t| std::sync::atomic::AtomicUsize::new(blocks_of(t).len())).collect();
-    let build = |t: usize| {
-        let mut st = ParseStats {
-            tokens: 0.0,
-            cost: 0.0,
-            seg: Vec::new(),
-            use_: [0, 1, 2].map(|k| vec![0.0; d.tabs[k].strs.len()]),
-            v: [0.0; 4],
-            types: HashMap::default(),
-        };
-        for i in range(t) {
+    let new_st = || ParseStats {
+        tokens: 0.0,
+        cost: 0.0,
+        seg: Vec::new(),
+        use_: [0, 1, 2].map(|k| vec![0.0; d.tabs[k].strs.len()]),
+        v: [0.0; NVAR_MAX],
+        types: HashMap::default(),
+        bytes: 0.0,
+    };
+    // a range's statistics over its segments lo..hi (fed in segment order)
+    let feed = |st: &mut ParseStats, lo: usize, hi: usize| {
+        for i in lo..hi {
             let f = c.freqs[i];
             let (ks, ends, all) = slots[i / B].get().unwrap();
             let j = i % B;
@@ -1541,6 +3092,7 @@ fn parse_corpus(d: &Dict, c: &Corpus, threads: usize, want_types: bool) -> Parse
             }
             for tk in toks {
                 if tk.c == NONE {
+                    st.bytes += f * tk.v as f64;
                     continue;
                 }
                 st.use_[0][tk.c as usize] += f;
@@ -1552,14 +3104,55 @@ fn parse_corpus(d: &Dict, c: &Corpus, threads: usize, want_types: bool) -> Parse
                 }
             }
         }
+    };
+    let build = |t: usize| {
+        let mut st = new_st();
+        let r = range(t);
+        feed(&mut st, r.start, r.end);
         st
+    };
+    // Every range's statistics are built block by block as its blocks come in (in block order,
+    // so exactly as build would): a thread that parsed a block feeds it, and any later blocks
+    // already parsed, to its ranges unless another thread is feeding that range right now (that
+    // one then sees the block when it re-checks after letting go). The range's last block sends
+    // it on.
+    let states: Vec<std::sync::Mutex<(usize, Option<ParseStats>)>> =
+        (0..threads).map(|t| std::sync::Mutex::new((blocks_of(t).start, (!blocks_of(t).is_empty()).then(new_st)))).collect();
+    let advance = |t: usize, tx: &std::sync::mpsc::Sender<(usize, ParseStats)>| {
+        let (bl, r) = (blocks_of(t), range(t));
+        loop {
+            let Ok(mut g) = states[t].try_lock() else { return };
+            let mut b = g.0;
+            while b < bl.end && slots[b].get().is_some() {
+                let st = g.1.as_mut().unwrap();
+                feed(st, (b * B).max(r.start), ((b + 1) * B).min(r.end));
+                b += 1;
+            }
+            g.0 = b;
+            if b == bl.end {
+                if let Some(st) = g.1.take() {
+                    tx.send((t, st)).unwrap();
+                }
+                return;
+            }
+            drop(g);
+            // (fences on both sides: a block set while we held the lock is seen here, or its
+            // thread's try_lock gets the lock)
+            std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
+            if slots[b].get().is_none() {
+                return;
+            }
+        }
     };
     let tq = Instant::now();
     let next = std::sync::atomic::AtomicUsize::new(0);
+    let parsed = std::sync::atomic::AtomicUsize::new(0);
+    let t_last: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
     let (tx, rx) = std::sync::mpsc::channel::<(usize, ParseStats)>();
-    std::thread::scope(|s| {
+    let st = std::thread::scope(|s| {
         for _ in 0..threads {
-            let (tx, next, slots, left, build, blocks_of) = (tx.clone(), &next, &slots, &left, &build, &blocks_of);
+            let (tx, next, slots, advance, blocks_of) = (tx.clone(), &next, &slots, &advance, &blocks_of);
+            let (parsed, t_last) = (&parsed, &t_last);
             s.spawn(move || {
                 let (mut sc, mut toks) = (Scratch::new(), Vec::new());
                 loop {
@@ -1575,15 +3168,17 @@ fn parse_corpus(d: &Dict, c: &Corpus, threads: usize, want_types: bool) -> Parse
                         ends.push(all.len() as u32);
                     }
                     let _ = slots[b].set((ks, ends, all));
-                    // the ranges this block belongs to: the one it completes is built here
+                    if parsed.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1 == nb {
+                        *t_last.lock().unwrap() = Some(Instant::now());
+                    }
+                    std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
+                    // the ranges this block belongs to
                     let t0 = b * B / chunk;
                     for t in t0..threads {
                         if !blocks_of(t).contains(&b) {
                             break;
                         }
-                        if left[t].fetch_sub(1, std::sync::atomic::Ordering::AcqRel) == 1 {
-                            tx.send((t, build(t))).unwrap();
-                        }
+                        advance(t, &tx);
                     }
                 }
             });
@@ -1607,9 +3202,15 @@ fn parse_corpus(d: &Dict, c: &Corpus, threads: usize, want_types: bool) -> Parse
             tm += tw.elapsed().as_secs_f64();
         }
         prof_add("pc_merge", tm);
+        if let Some(tl) = *t_last.lock().unwrap() {
+            prof("pc_tail", tl);
+            prof_add("pc_body", tl.duration_since(tq).as_secs_f64());
+        }
         prof("pc_all", tq);
         acc.unwrap()
-    })
+    });
+    let kept = keep.then(|| slots.into_iter().map(|b| b.into_inner().unwrap()).collect());
+    (st, kept)
 }
 
 /// add a later part's statistics (in part order: the types map depends on the insertion order)
@@ -1622,44 +3223,75 @@ fn merge_stats(acc: &mut ParseStats, p: ParseStats) {
             *a += b;
         }
     }
-    for k in 0..4 {
+    for k in 0..NVAR_MAX {
         acc.v[k] += p.v[k];
     }
+    acc.bytes += p.bytes;
     for (t, n) in p.types {
         *acc.types.entry(t).or_insert(0.0) += n;
     }
 }
 
 /// q = (n + 1/2) / (sum n + |D|/2), secondary cost = -log2 q (bits)
+/// (code_len: the cores' distribution also has the BYTE pseudo-core, n = byte tokens)
 fn update_costs(d: &mut Dict, st: &ParseStats) {
     for k in 0..3 {
         let live = d.tabs[k].live() as f64;
         let tot: f64 = (0..d.tabs[k].strs.len()).filter(|&i| d.tabs[k].alive[i]).map(|i| st.use_[k][i]).sum();
+        if k == 0 && (d.cl.on || d.cl.wu > 0.0) {
+            let den = tot + st.bytes + (live + 1.0) / 2.0;
+            for i in 0..d.tabs[k].strs.len() {
+                d.tabs[k].cost[i] = -((st.use_[k][i] + 0.5) / den).log2();
+            }
+            d.cl.byte = 8.0 - ((st.bytes + 0.5) / den).log2();
+            continue;
+        }
         for i in 0..d.tabs[k].strs.len() {
             d.tabs[k].cost[i] = -((st.use_[k][i] + 0.5) / (tot + live / 2.0)).log2();
         }
     }
-    let tot: f64 = st.v.iter().sum();
-    for k in 0..4 {
-        d.vcost[k] = -((st.v[k] + 0.5) / (tot + 2.0)).log2();
+    let tot: f64 = st.v.iter().sum(); // (unused variations count 0)
+    let nv = d.nvar();
+    for k in 0..nv {
+        d.vcost[k] = -((st.v[k] + 0.5) / (tot + nv as f64 / 2.0)).log2();
     }
     d.refresh_arcs();
 }
 
-/// Counts behind the conditional affix cost: n(prefix, core), n(core, suffix), n(core).
 /// Partner prices (partner_n0 > 0): affix price = pi x L0 x (1 + k / E_w), E_w from the parse.
-fn update_partner_prices(d: &mut Dict, st: &ParseStats) {
-    let n0 = d.pricing.n0;
-    if n0 == 0.0 || d.pricing.pi == 0.0 {
-        return;
+/// Signature prices (update_signature_prices, sig_k > 0) then multiply these for affixes.
+/// Both come out exactly as computed one after the other: the partner prices of prefixes and
+/// suffixes (one thread each, every sum in the same order) and the signature counts (which do not
+/// depend on any price) are computed at the same time.
+fn update_prices(d: &mut Dict, st: &ParseStats) {
+    let partner = d.pricing.n0 != 0.0 && d.pricing.pi != 0.0;
+    let sig = d.pricing.sig_k != 0.0 && d.pricing.pi_core != 0.0;
+    let dd: &Dict = d;
+    let (prices, maps) = std::thread::scope(|sc| {
+        let hs: Vec<_> = if partner { (1..3).map(|k| sc.spawn(move || partner_prices(dd, st, k))).collect() } else { Vec::new() };
+        let maps = sig.then(|| sig_maps(dd, st));
+        (hs.into_iter().map(|h| h.join().unwrap()).collect::<Vec<Vec<f64>>>(), maps)
+    });
+    for (k, p) in (1..3).zip(prices) {
+        for a in 1..p.len() {
+            d.tabs[k].price[a] = p[a];
+        }
     }
+    if let Some(m) = maps {
+        update_signature_prices(d, st, m);
+    }
+}
+
+/// the partner price of every row of affix table k (update_prices; row 0: unused)
+fn partner_prices(d: &Dict, st: &ParseStats, k: usize) -> Vec<f64> {
+    let n0 = d.pricing.n0;
     let mut uc = vec![0.0f64; d.tabs[0].strs.len()];
     for (t, &n) in &st.types {
         if t.c != NONE {
             uc[t.c as usize] += n;
         }
     }
-    for k in 1..3 {
+    {
         let mut pair: HashMap<(u32, u32), f64, Fast> = HashMap::default();
         for (t, &n) in &st.types {
             let a = if k == 1 { t.p } else { t.s };
@@ -1682,12 +3314,272 @@ fn update_partner_prices(d: &mut Dict, st: &ParseStats) {
                 h[a as usize] -= q * q.log2();
             }
         }
+        let mut out = vec![0.0f64; len];
         for a in 1..len {
             let e = if tot[a] > 0.0 { h[a].exp2() * wtot[a] / tot[a] } else { 0.0 };
-            let l0 = d.l0_of(&d.tabs[k].strs[a]);
-            d.tabs[k].price[a] = d.pricing.pi * l0 * (1.0 + d.pricing.k / e.max(1e-3));
+            let l0 = d.l0_of(&d.stat_str(k, &d.tabs[k].strs[a]));
+            out[a] = d.pricing.pi * l0 * (1.0 + d.pricing.k / e.max(1e-3));
+        }
+        out
+    }
+}
+
+type SigMaps = ([Vec<u32>; 2], Vec<f64>, [HashMap<(u32, u32), f64, Fast>; 2]);
+
+/// update_signature_prices' counts: the letter piece of every affix row, uses per core, and
+/// (core, piece) -> uses per side
+fn sig_maps(d: &Dict, st: &ParseStats) -> SigMaps {
+    let an = |c: u32| !is_byte(c) && d.sym.alnum[c as usize] != 0;
+    // letter piece of every affix row: the letter run at its inner end (0 = none)
+    let mut piece_ids: HashMap<Vec<u32>, u32, Fast> = HashMap::default();
+    let mut piece: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
+    for k in 1..3 {
+        piece[k - 1] = d.tabs[k]
+            .strs
+            .iter()
+            .map(|a| {
+                let run: Vec<u32> = if k == 1 {
+                    let n = a.iter().rev().take_while(|&&c| an(c)).count();
+                    a[a.len() - n..].to_vec()
+                } else {
+                    a.iter().copied().take_while(|&c| an(c)).collect()
+                };
+                if run.is_empty() {
+                    0
+                } else {
+                    let n = piece_ids.len() as u32 + 1;
+                    *piece_ids.entry(run).or_insert(n)
+                }
+            })
+            .collect();
+    }
+    let nc = d.tabs[0].strs.len();
+    // (core, piece) -> uses per side, and uses per core: the two sides' maps are built on two
+    // threads, each from the types in the same order as one loop would
+    let (uses, by) = {
+        let (piece, types) = (&piece, &st.types);
+        std::thread::scope(|sc| {
+            let h1 = sc.spawn(move || {
+                let mut by1: HashMap<(u32, u32), f64, Fast> = HashMap::default();
+                for (t, &n) in types {
+                    if t.c != NONE {
+                        *by1.entry((t.c, piece[1][t.s as usize])).or_insert(0.0) += n;
+                    }
+                }
+                by1
+            });
+            let mut uses = vec![0.0f64; nc];
+            let mut by0: HashMap<(u32, u32), f64, Fast> = HashMap::default();
+            for (t, &n) in types {
+                if t.c == NONE {
+                    continue;
+                }
+                uses[t.c as usize] += n;
+                *by0.entry((t.c, piece[0][t.p as usize])).or_insert(0.0) += n;
+            }
+            (uses, [by0, h1.join().unwrap()])
+        })
+    };
+    (piece, uses, by)
+}
+
+/// Paradigm (signature) prices of the cores (sig_k > 0): see the header. (Counts from sig_maps.)
+fn update_signature_prices(d: &mut Dict, st: &ParseStats, (piece, uses, by): SigMaps) {
+    let nc = d.tabs[0].strs.len();
+    let mut mult = vec![1.0f64; nc];
+    // per side, 1 / (paradigm size) of every core whose signature has a letter piece (0 otherwise):
+    // an affix pays by the average of it over its uses (see below)
+    let mut inv_shared: [Vec<f64>; 2] = [vec![0.0; nc], vec![0.0; nc]];
+    if d.pricing.sig_soft {
+        // SOFT: per ending, not per exact set. N(p) = cores (>= 20 uses) taking piece p with at
+        // least sig_share of their uses; a core pays 1 + sig_k x sum_p share(c, p) / N(p) per side.
+        // Erfolg {e, s, t, reich, Miss} is a rare exact set but every ending is shared, so it pays
+        // about its spelling; Broadc {ast} still pays 1 + sig_k / N(ast).
+        // (the sides on two threads; their factors are applied in side order)
+        let softs: Vec<Vec<f64>> = std::thread::scope(|sc| {
+            let dd: &Dict = d;
+            let hs: Vec<_> = (0..2).map(|side| {
+                let (by, uses, d) = (&by, &uses, dd);
+                sc.spawn(move || {
+                    let mut n_of: HashMap<u32, f64, Fast> = HashMap::default();
+                    for (&(c, pc), &n) in &by[side] {
+                        if pc != 0 && uses[c as usize] >= 20.0 && n >= d.pricing.sig_share * uses[c as usize] {
+                            *n_of.entry(pc).or_insert(0.0) += 1.0;
+                        }
+                    }
+                    let mut soft = vec![0.0f64; nc];
+                    let mut top = vec![0.0f64; nc]; // share of the core's most frequent letter piece
+                    let mut bound = vec![0.0f64; nc]; // share of its uses with any letter piece on this side
+                    for (&(c, pc), &n) in &by[side] {
+                        if pc != 0 && uses[c as usize] > 0.0 {
+                            bound[c as usize] += n / uses[c as usize];
+                        }
+                        if pc != 0 && uses[c as usize] > 0.0 && n >= d.pricing.sig_share * uses[c as usize] {
+                            let sh = n / uses[c as usize];
+                            soft[c as usize] += sh / n_of.get(&pc).copied().unwrap_or(0.0).max(1.0);
+                            top[c as usize] = top[c as usize].max(sh);
+                        }
+                    }
+                    // LEFT-BOUND: on the prefix side a core should be a free stem. One that nearly always
+                    // follows letters (uch in m:uch / s:uch, heir in t:heir, rès in t:rès) is a word's
+                    // tail, however many different letters come before it. (Not on the suffix side: bound
+                    // stems + endings, कर:ते or mach:en, are ordinary morphology.)
+                    if side == 0 {
+                        for c in 0..nc {
+                            top[c] = top[c].max(bound[c]);
+                        }
+                    }
+                    // CONCENTRATION: a core that nearly always takes the same letter piece is really core +
+                    // piece (migh + t, olar after s): 0 up to a 50% share, rising to 1 at 100%. Common
+                    // endings alone do not make such a core look regular.
+                    for c in 0..nc {
+                        soft[c] += (2.0 * top[c] - 1.0).max(0.0);
+                    }
+                    soft
+                })
+            }).collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for (side, soft) in softs.into_iter().enumerate() {
+            for c in 0..nc {
+                mult[c] *= 1.0 + d.pricing.sig_k * soft[c];
+            }
+            inv_shared[side] = soft;
         }
     }
+    for side in 0..2 {
+        if d.pricing.sig_soft {
+            break;
+        }
+        let mut sig: Vec<Vec<u32>> = vec![Vec::new(); nc];
+        for (&(c, pc), &n) in &by[side] {
+            if n >= d.pricing.sig_share * uses[c as usize] {
+                sig[c as usize].push(pc);
+            }
+        }
+        for g in sig.iter_mut() {
+            g.sort_unstable();
+        }
+        let mut count: HashMap<&[u32], f64, Fast> = HashMap::default();
+        for (c, g) in sig.iter().enumerate() {
+            if uses[c] >= 20.0 && g.iter().any(|&p| p != 0) {
+                *count.entry(&g[..]).or_insert(0.0) += 1.0;
+            }
+        }
+        for c in 0..nc {
+            let g = &sig[c];
+            if g.iter().any(|&p| p != 0) {
+                let shared = count.get(&g[..]).copied().unwrap_or(0.0).max(1.0);
+                mult[c] *= 1.0 + d.pricing.sig_k / shared;
+                inv_shared[side][c] = 1.0 / shared;
+            }
+        }
+    }
+    for c in 0..nc {
+        let base = d.price_of(0, &d.tabs[0].strs[c]);
+        d.tabs[0].price[c] = base * mult[c];
+    }
+    // the affix side of the same test: an affix carrying letters is part of the paradigms of the
+    // cores it attaches to. s, -ing, ा attach to stems of paradigms shared by thousands and pay about
+    // their spelling; a word piece (Broadc|ast, パッケ|ージ) attaches to one-off stems and pays up to
+    // 1 + sig_k times more, so moving a fragment from the core into the affix no longer dodges the
+    // price. (Multiplies the partner price set by update_prices this pass.)
+    // (per affix table: its sums on its own thread, same order)
+    let sums: Vec<(Vec<f64>, Vec<f64>)> = {
+        let dd: &Dict = d;
+        let (piece, inv_shared) = (&piece, &inv_shared);
+        std::thread::scope(|sc| {
+            let hs: Vec<_> = (1..3)
+                .map(|k| {
+                    sc.spawn(move || {
+                        let side = k - 1;
+                        let len = dd.tabs[k].strs.len();
+                        let (mut tot, mut acc) = (vec![0.0f64; len], vec![0.0f64; len]);
+                        for (t, &n) in &st.types {
+                            let a = if k == 1 { t.p } else { t.s } as usize;
+                            if t.c == NONE || a == 0 || piece[side][a] == 0 {
+                                continue;
+                            }
+                            tot[a] += n;
+                            acc[a] += n * inv_shared[side][t.c as usize];
+                        }
+                        (tot, acc)
+                    })
+                })
+                .collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        })
+    };
+    for (k, (tot, acc)) in (1..3).zip(sums) {
+        let len = d.tabs[k].strs.len();
+        for a in 1..len {
+            if tot[a] > 0.0 {
+                // start from this pass's partner price, or the fixed price if that is off (so the
+                // factor never compounds across passes)
+                let base = if d.pricing.n0 > 0.0 { d.tabs[k].price[a] } else { d.price_of(k, &d.tabs[k].strs[a]) };
+                d.tabs[k].price[a] = base * (1.0 + d.pricing.sig_k * acc[a] / tot[a]);
+            }
+        }
+    }
+}
+
+/// code_len: the pair statistics of the parse (hard EM; see the header), after update_costs
+/// (which sets the marginals they back off to). Every value depends only on its own counts, so
+/// the maps' order does not matter.
+fn update_codelen(d: &mut Dict, st: &ParseStats) {
+    if !d.cl.on {
+        return;
+    }
+    let nc = d.tabs[0].strs.len();
+    let mut n = vec![0.0f64; nc];
+    let mut cnt: [HashMap<(u32, u32), f64, Fast>; 3] = Default::default();
+    for (t, &f) in &st.types {
+        if t.c == NONE {
+            continue;
+        }
+        n[t.c as usize] += f;
+        *cnt[0].entry((t.p, t.c)).or_insert(0.0) += f;
+        *cnt[1].entry((t.c, t.s)).or_insert(0.0) += f;
+        *cnt[2].entry((t.c, t.v)).or_insert(0.0) += f;
+    }
+    // beta per core and side: fixed, or Witten-Bell (distinct partners, at least 1)
+    let mut beta = vec![[1.0f64; 3]; nc];
+    if d.cl.beta > 0.0 {
+        beta.iter_mut().for_each(|b| *b = [d.cl.beta; 3]);
+    } else {
+        let mut tt = vec![[0u32; 3]; nc];
+        for k in 0..3 {
+            for &(a, b) in cnt[k].keys() {
+                tt[if k == 0 { b } else { a } as usize][k] += 1;
+            }
+        }
+        for (b, t) in beta.iter_mut().zip(&tt) {
+            for k in 0..3 {
+                b[k] = (t[k] as f64).max(1.0);
+            }
+        }
+    }
+    d.cl.bo = (0..nc).map(|c| std::array::from_fn(|k| cl_q(((n[c] + beta[c][k]) / beta[c][k]).log2()))).collect();
+    for k in 0..3 {
+        let marg = |a: u32| -> f64 {
+            match k {
+                0 => d.tabs[1].cost[a as usize],
+                1 => d.tabs[2].cost[a as usize],
+                _ => d.vcost[a as usize],
+            }
+        };
+        d.cl.pair[k] = cnt[k]
+            .iter()
+            .filter(|&(_, &f)| f >= CL_MIN_PAIR)
+            .map(|(&(a, b), &f)| {
+                let (c, x) = if k == 0 { (b, a) } else { (a, b) };
+                let bt = beta[c as usize][k];
+                ((a, b), cl_q(-((f + bt * (-marg(x)).exp2()) / (n[c as usize] + bt)).log2()))
+            })
+            .collect();
+    }
+    d.cl.vb = codelen_vb(&d.cl.bo, &d.cl.pair[2], &d.vcost, d.nvar());
+    d.cl.index();
 }
 
 fn update_cond(d: &mut Dict, st: &ParseStats) {
@@ -1831,20 +3723,129 @@ impl Csr {
     }
 }
 
-fn prune_to(d: &mut Dict, c: &Corpus, budget: usize, threads: usize, protect_chars: bool, step: f64) {
+/// prune_reuse: the parse in `blocks` (with its statistics st) after the rows flagged in `gone`
+/// were dropped: every segment whose tokens use a dropped row is parsed again (it has to change),
+/// every other one keeps its tokens, and st is updated by the difference (a token a segment keeps
+/// cancels out; in block and segment order; a type whose count falls to zero is removed; counts
+/// are sums of whole segment frequencies, so they stay exact). Returns the number of segments
+/// parsed.
+fn reparse_dirty(d: &Dict, c: &Corpus, threads: usize, blocks: &mut [Parsed], gone: &[Vec<bool>; 3], st: &mut ParseStats) -> usize {
+    let is_gone = |t: &Tok| t.c != NONE && (gone[0][t.c as usize] || gone[1][t.p as usize] || gone[2][t.s as usize]);
+    let seg_of = |p: &Parsed, j: usize| -> std::ops::Range<usize> { (if j == 0 { 0 } else { p.1[j - 1] as usize })..p.1[j] as usize };
+    let bl: &[Parsed] = blocks;
+    let tq = Instant::now();
+    // per block: the new block, the number of segments parsed again, the changed tokens (count
+    // differences) and the differences of cost, real tokens and byte tokens
+    type Redo = (Parsed, usize, Vec<(Tok, f64)>, [f64; 3]);
+    let res: Vec<Option<Redo>> = par_map(bl.len(), threads, 1, || (Scratch::new(), Vec::new(), Vec::new()), |(sc, toks, old), b| {
+        let p = &bl[b];
+        let dirty: Vec<usize> = (0..p.0.len()).filter(|&j| p.2[seg_of(p, j)].iter().any(is_gone)).collect();
+        if dirty.is_empty() {
+            return None;
+        }
+        let lo = b * PC_BLOCK;
+        let (mut ks, mut ends, mut all) = (Vec::with_capacity(p.0.len()), Vec::with_capacity(p.0.len()), Vec::with_capacity(p.2.len()));
+        let (mut delta, mut sums) = (Vec::new(), [0.0f64; 3]);
+        let mut q = 0;
+        for j in 0..p.0.len() {
+            if q < dirty.len() && dirty[q] == j {
+                q += 1;
+                let f = c.freqs[lo + j];
+                let k = d.parse(&c.segs[lo + j], sc, Some(toks), None).0;
+                ks.push(k);
+                all.extend_from_slice(toks);
+                sums[0] += f * (k - p.0[j]);
+                old.clear();
+                old.extend_from_slice(&p.2[seg_of(p, j)]);
+                let real = |ts: &[Tok]| ts.iter().map(|t| if t.c == NONE { t.v } else { 1 }).sum::<u32>() as f64;
+                sums[1] += f * (real(toks) - real(old));
+                for (s, ts) in [(-f, &old[..]), (f, &toks[..])] {
+                    for t in ts.iter().filter(|t| t.c == NONE) {
+                        sums[2] += s * t.v as f64;
+                    }
+                }
+                // tokens the segment keeps cancel out
+                for t in toks.iter().filter(|t| t.c != NONE) {
+                    match old.iter().position(|o| o == t) {
+                        Some(i) => {
+                            old.swap_remove(i);
+                        }
+                        None => delta.push((*t, f)),
+                    }
+                }
+                delta.extend(old.iter().filter(|t| t.c != NONE).map(|t| (*t, -f)));
+            } else {
+                ks.push(p.0[j]);
+                all.extend_from_slice(&p.2[seg_of(p, j)]);
+            }
+            ends.push(all.len() as u32);
+        }
+        Some(((ks, ends, all), dirty.len(), delta, sums))
+    });
+    prof("rd_parse", tq);
+    let tq = Instant::now();
+    let mut n = 0;
+    for (b, r) in res.into_iter().enumerate() {
+        let Some((newp, nd, delta, sums)) = r else { continue };
+        blocks[b] = newp;
+        n += nd;
+        st.cost += sums[0];
+        st.tokens += sums[1];
+        st.bytes += sums[2];
+        for (t, s) in delta {
+            st.use_[0][t.c as usize] += s;
+            st.use_[1][t.p as usize] += s;
+            st.use_[2][t.s as usize] += s;
+            st.v[t.v as usize] += s;
+            let e = st.types.entry(t).or_insert(0.0);
+            *e += s;
+            if e.abs() < 1e-6 {
+                st.types.remove(&t);
+            }
+        }
+    }
+    prof("rd_apply", tq);
+    n
+}
+
+/// Returns true if prune_reuse is on and the dictionary and costs are those the last pass's
+/// (re-used) parse was re-estimated with: an EM step on the re-used parse would change nothing.
+fn prune_to(d: &mut Dict, c: &Corpus, budget: usize, threads: usize, protect_chars: bool, step: f64, reuse: bool, tail: f64) -> bool {
     let mut pass = 0;
     let priced = d.pricing.pi > 0.0 || d.pricing.pi_core > 0.0 || d.pricing.conc > 0.0;
+    // prune_reuse: the last pass's parse (statistics, tokens) and the rows it dropped
+    let mut cache: Option<(ParseStats, Vec<Parsed>)> = None;
+    let mut last_dropped: Vec<(usize, u32)> = Vec::new();
     while (d.rows() > budget || priced) && pass < 100 {
         pass += 1;
         let tq = Instant::now();
-        let st = parse_corpus(d, c, threads, true);
+        let mut blocks: Option<Vec<Parsed>> = None;
+        let mut reparsed = None;
+        let st = match cache.take() {
+            Some((mut st, mut bl)) => {
+                let mut gone: [Vec<bool>; 3] = std::array::from_fn(|k| vec![false; d.tabs[k].strs.len()]);
+                for &(k, i) in &last_dropped {
+                    gone[k][i as usize] = true;
+                }
+                reparsed = Some(reparse_dirty(d, c, threads, &mut bl, &gone, &mut st));
+                blocks = Some(bl);
+                st
+            }
+            None if reuse => {
+                let (st, bl) = parse_corpus_k(d, c, threads, true, true);
+                blocks = bl;
+                st
+            }
+            None => parse_corpus(d, c, threads, true),
+        };
         prof("prune_parse", tq);
         let tq = Instant::now();
         update_costs(d, &st);
         update_spec(d, &st);
         update_pmi(d, &st);
         update_cond(d, &st);
-        update_partner_prices(d, &st);
+        update_codelen(d, &st);
+        update_prices(d, &st);
         prof("prune_update", tq);
         let tq = Instant::now();
         let types: Vec<(Tok, f64)> = st.types.iter().map(|(t, n)| (*t, *n)).collect();
@@ -1882,6 +3883,13 @@ fn prune_to(d: &mut Dict, c: &Corpus, budget: usize, threads: usize, protect_cha
                 } else {
                     0.0
                 }
+                + if d.cl.on { d.cl.w * d.cl_bits(t) } else { 0.0 }
+                + if d.cl.wu > 0.0 {
+                    // (code_w without code_len: the token's unconditional bits)
+                    d.cl.wu * (d.tabs[0].cost[t.c as usize] + d.vcost[t.v as usize] + d.tabs[1].cost[t.p as usize] + d.tabs[2].cost[t.s as usize])
+                } else {
+                    0.0
+                }
         };
         let term_of = |d: &Dict, (sc, text): &mut (Scratch, Vec<u32>), ban: (usize, u32), ti: u32| -> f64 {
             let (t, n) = &types[ti as usize];
@@ -1901,16 +3909,6 @@ fn prune_to(d: &mut Dict, c: &Corpus, budget: usize, threads: usize, protect_cha
                 }
             }
         }
-        let loss_of = |d: &Dict, k: usize, i: u32, limit: f64, sc: &mut (Scratch, Vec<u32>)| -> f64 {
-            let mut loss = 0.0;
-            for &ti in uses[k].get(i as usize) {
-                loss += term_of(d, sc, (k, i), ti);
-                if loss > limit {
-                    break;
-                }
-            }
-            loss
-        };
         // affixes concentrated on one core (conc): treated as worthless, so they go first
         let mut conc_bad: [Vec<bool>; 2] = [vec![false; d.tabs[1].strs.len()], vec![false; d.tabs[2].strs.len()]];
         if d.pricing.conc > 0.0 {
@@ -2023,7 +4021,12 @@ fn prune_to(d: &mut Dict, c: &Corpus, budget: usize, threads: usize, protect_cha
         let cap = ((d.rows() as f64) * step).ceil() as usize;
         let need = (d.rows().saturating_sub(budget)).max(below).min(cap);
         if need == 0 {
-            break;
+            return reuse;
+        }
+        if tail > 0.0 && d.rows() <= budget && (need as f64) < tail * d.rows() as f64 {
+            // prune_tail_ppm (lossy): the last few rows below their price stay
+            eprintln!("      prune pass {pass}: stopping, {need} rows below price (prune_tail_ppm)");
+            return reuse;
         }
         let sorted = |net: &[f64]| {
             let mut order: Vec<usize> = (0..cand.len()).collect();
@@ -2066,6 +4069,52 @@ fn prune_to(d: &mut Dict, c: &Corpus, budget: usize, threads: usize, protect_cha
         let mut dropped: Vec<(usize, u32)> = Vec::new();
         let mut sc = new_sc();
         let mut pos = 0;
+        // rows that the types of an already dropped row now parse with: this pass's losses were
+        // counted from the parse before any drop, so such a row looks unused by those types and
+        // would be dropped too (Präsident goes because Prä + sident is one token, and then Prä or
+        // sident goes because Präsident had all the uses). They are kept until the next pass
+        // re-parses and counts them right.
+        let mut pinned: [Vec<bool>; 3] = std::array::from_fn(|k| vec![false; d.tabs[k].strs.len()]);
+        // The re-check of candidate o against the rows dropped so far: whether it is dropped, and the
+        // tokens its uses' texts are parsed with once it is gone (pinned below). A candidate with a
+        // finite net value has its uses' losses summed again with the row banned, up to its limit;
+        // one without (conc) is dropped and its uses parsed with the row gone (banning a row parses
+        // exactly as dropping it). Also returns every text it parsed (folded).
+        let recheck = |d: &Dict, (sc, text): &mut (Scratch, Vec<u32>), net: &[f64], o: usize| -> (bool, Vec<Tok>, Vec<Vec<u32>>) {
+            let (k, i) = cand[o];
+            let (mut pin, mut texts, mut toks) = (Vec::new(), Vec::new(), Vec::new());
+            let limit = prices[o] + net[o].max(cutoff) + 1e-9;
+            let mut loss = 0.0;
+            for &ti in uses[k].get(i as usize) {
+                let (t, n) = &types[ti as usize];
+                d.token_text_into(t, text);
+                toks.clear();
+                let (alt, _) = d.parse(text, sc, Some(&mut toks), Some((k, i)));
+                pin.extend_from_slice(&toks);
+                texts.push(text.iter().map(|&c| if is_byte(c) { c } else { d.sym.fold[c as usize] }).collect());
+                if net[o].is_finite() {
+                    loss += n * (if alt.is_infinite() { 1e6 } else { (alt - own_of(d, t)).max(0.0) });
+                    if loss > limit {
+                        return (false, pin, texts);
+                    }
+                }
+            }
+            (true, pin, texts)
+        };
+        // Re-checks are computed ahead in parallel, a batch of the next candidates at a time,
+        // against the rows dropped when the batch starts. One is then used as it is unless a row
+        // dropped since occurs (folded) in a text it parsed; otherwise it is redone. Exact: a row
+        // whose string occurs nowhere in a text has no arc in its parse, so every parse, loss and
+        // token is what the re-check at its turn computes.
+        const SPEC_W: usize = 256;
+        let mut spec: HashMap<usize, (bool, Vec<Tok>, Vec<Vec<u32>>), Fast> = HashMap::default();
+        let mut spec_until = 0usize;
+        // the rows dropped since the batch was computed (folded strings, by first symbol)
+        let mut since: HashMap<u32, Vec<Vec<u32>>, Fast> = HashMap::default();
+        let occurs = |since: &HashMap<u32, Vec<Vec<u32>>, Fast>, texts: &[Vec<u32>]| -> bool {
+            !since.is_empty()
+                && texts.iter().any(|t| (0..t.len()).any(|p| since.get(&t[p]).is_some_and(|v| v.iter().any(|s| t[p..].starts_with(s)))))
+        };
         while pos < order.len() {
             if done >= need {
                 break;
@@ -2075,29 +4124,67 @@ fn prune_to(d: &mut Dict, c: &Corpus, budget: usize, threads: usize, protect_cha
                 net = net_of(&acc);
                 order = sorted(&net);
                 safe = safe_of(&acc, &net, lazy);
+                spec.clear();
+                spec_until = pos;
+            }
+            if pos >= spec_until {
+                let hi = (pos + SPEC_W).min(safe).min(order.len());
+                let batch: Vec<usize> = order[pos..hi].iter().copied().filter(|&o| !pinned[cand[o].0][cand[o].1 as usize]).collect();
+                let dd: &Dict = d;
+                let res = par_map(batch.len(), threads, 1, new_sc, |sc, q| recheck(dd, sc, &net, batch[q]));
+                spec = batch.into_iter().zip(res).collect();
+                since.clear();
+                spec_until = hi;
             }
             let o = order[pos];
             pos += 1;
             let (k, i) = cand[o];
-            if net[o].is_finite() {
-                // re-check against the rows already dropped
-                let limit = prices[o] + net[o].max(cutoff) + 1e-9;
-                if loss_of(d, k, i, limit, &mut sc) > limit {
-                    continue;
+            if pinned[k][i as usize] {
+                continue;
+            }
+            let (drop, pin_toks) = match spec.remove(&o) {
+                Some((drop, pin, texts)) if !occurs(&since, &texts) => (drop, pin),
+                _ => {
+                    let (drop, pin, _) = recheck(d, &mut sc, &net, o);
+                    (drop, pin)
                 }
+            };
+            if !drop {
+                continue;
             }
             d.tabs[k].alive[i as usize] = false;
+            let f: Vec<u32> = d.tabs[k].strs[i as usize].iter().map(|&c| d.sym.fold[c as usize]).collect();
+            if let Some(&c0) = f.first() {
+                since.entry(c0).or_default().push(f);
+            }
             dropped.push((k, i));
             removed[k] += 1;
             done += 1;
+            for t in &pin_toks {
+                if t.c != NONE && (t.c as usize) < pinned[0].len() {
+                    pinned[0][t.c as usize] = true;
+                }
+                if t.p != 0 && (t.p as usize) < pinned[1].len() {
+                    pinned[1][t.p as usize] = true;
+                }
+                if t.s != 0 && (t.s as usize) < pinned[2].len() {
+                    pinned[2][t.s as usize] = true;
+                }
+            }
         }
         prof("prune_recheck", tq);
         let tq = Instant::now();
         d.rebuild();
         prof("prune_rebuild", tq);
-        eprintln!("      prune pass {pass}: -{} cores -{} prefixes -{} suffixes (cutoff {:.0} tokens net, {below} rows below price)",
-                  removed[0], removed[1], removed[2], cutoff);
+        eprintln!("      prune pass {pass}: -{} cores -{} prefixes -{} suffixes (cutoff {:.0} tokens net, {below} rows below price){}",
+                  removed[0], removed[1], removed[2], cutoff,
+                  reparsed.map_or(String::new(), |r| format!(" (reuse: {r} of {} segments parsed again)", c.segs.len())));
+        if let Some(bl) = blocks {
+            cache = Some((st, bl));
+            last_dropped = dropped;
+        }
     }
+    false
 }
 
 // ------------------------------------------------------------------ substring index
@@ -2212,17 +4299,58 @@ fn mine(x: &[u32], wt: &[u32], min_freq: u32, max_len: usize, threads: usize) ->
 
 // ------------------------------------------------------------------ proposals
 
+/// Exclusive count of every frequent substring: its count minus that of its more frequent
+/// one-symbol extension (left or right, as found at its stored occurrence). Package values use it:
+/// every substring of a frequent word is itself a frequent substring (msel, emsel, hemse ... of
+/// themselves), and with full counts the same occurrences were valued once per overlapping
+/// substring, so mid-word fragments collected many times the demand of the word itself. A
+/// substring that almost only occurs inside one longer one (closed-substring test) now brings
+/// almost nothing; them (in them, themselves, ...) keeps its own occurrences.
+fn exclusive_counts(sym: &Symbols, x: &[u32], subs: &[(u32, u16, u32)], threads: usize) -> Vec<u32> {
+    let mut cnt: HashMap<u64, u32, Fast> = HashMap::default();
+    cnt.reserve(subs.len());
+    for &(p, l, c) in subs {
+        cnt.insert(seq_hash(x[p as usize..p as usize + l as usize].iter().copied()), c);
+    }
+    let out = par_map(subs.len(), threads, 4096, || (), |_, k| {
+        let (p, l, c) = subs[k];
+        let (p, l) = (p as usize, l as usize);
+        let mut ext = 0u32;
+        // only extensions that continue a word (letter / digit / mark next to one) count: a
+        // space or punctuation before or after a word becomes an affix, not part of the core
+        let an = |c: u32| c != NONE && !is_byte(c) && sym.alnum.get(c as usize).is_some_and(|&a| a != 0);
+        if p > 0 && an(x[p - 1]) && an(x[p]) {
+            ext = ext.max(cnt.get(&seq_hash(x[p - 1..p + l].iter().copied())).copied().unwrap_or(0));
+        }
+        if p + l < x.len() && an(x[p + l]) && an(x[p + l - 1]) {
+            ext = ext.max(cnt.get(&seq_hash(x[p..p + l + 1].iter().copied())).copied().unwrap_or(0));
+        }
+        c.saturating_sub(ext)
+    });
+    eprintln!("  exclusive counts: {} of {} substrings keep >= 10% of their occurrences",
+              out.iter().zip(subs).filter(|(e, s)| **e as f64 >= 0.1 * s.2 as f64).count(), subs.len());
+    out
+}
+
 /// Row key: (table, string)
 type RowKey = (u8, Vec<u32>);
 
 /// Score every missing row by package demand; returns (demand, row) in no particular order.
-fn propose(d: &Dict, x: &[u32], subs: &[(u32, u16, u32)], max_packages: usize, threads: usize) -> Vec<(f64, RowKey)> {
+/// `failed` holds demand keys ([table, symbols..]) of rows that were added and pruned in the last
+/// round: a cut needing one of them is skipped, and so is a cut needing a dead row whose price is
+/// above the demand it has. Otherwise a package's value keeps going to the cut of the most
+/// widely shared fragments (suffix ोशिश, core ␣क), which are pruned again every round, and the
+/// word's own core (कोशिश) never gets the demand it would earn.
+fn propose(d: &Dict, x: &[u32], subs: &[(u32, u16, u32)], excl: &[u32], use_direct: bool, max_packages: usize, threads: usize,
+           failed: &std::collections::HashSet<Vec<u32>, Fast>) -> Vec<(f64, RowKey)> {
+    let tr_words = load_trace();
+    let tr_words = &tr_words;
     // value of each substring under the current dictionary
     let tq = Instant::now();
     let mut vals: Vec<(f64, usize)> = par_map(subs.len(), threads, 1024, Scratch::new, |sc, k| {
-        let (p, l, c) = subs[k];
+        let (p, l, _) = subs[k];
         let (t, _) = d.parse(&x[p as usize..p as usize + l as usize], sc, None, None);
-        (t > 1.0 + 1e-9).then(|| (c as f64 * (t - 1.0), k))
+        (t > 1.0 + 1e-9 && excl[k] > 0).then(|| (excl[k] as f64 * (t - 1.0), k))
     })
     .into_iter()
     .flatten()
@@ -2238,6 +4366,10 @@ fn propose(d: &Dict, x: &[u32], subs: &[(u32, u16, u32)], max_packages: usize, t
     // order). Row membership comes from trie walks (the tries hold exactly the live rows), so a
     // cut costs no string allocation or hashing.
     let cuts = |w: &[u32], cs: &mut CutScratch| {
+        if d.ca {
+            cuts_ca(d, w, cs);
+            return;
+        }
         let l = w.len();
         cs.cuts.clear();
         cs.p_ok.clear();
@@ -2271,20 +4403,44 @@ fn propose(d: &Dict, x: &[u32], subs: &[(u32, u16, u32)], max_packages: usize, t
             cs.s_ok[b] = ok && live(2, node);
         }
         for a in 0..l {
+            // mark_rule: no core, and no prefix, starts at a combining mark (such rows can never be
+            // added, so demand routed to them would be lost)
+            if d.sym.mark_at(w[a]) || (a > 0 && d.sym.mark_at(w[0])) {
+                continue;
+            }
             let p = &w[..a];
             let p_ok = cs.p_ok[a];
             let mut m = 0u8;
+            let (mut ca, mut h) = (CaseAcc::default(), SEQ_H0);
             let mut node = Some(0u32);
             cs.folded.clear();
             for b in a + 1..=l {
                 let ch = w[b - 1];
-                m = if b == a + 1 { d.sym.mask(ch) } else { combine(m, d.sym.mask(ch)) };
-                if variation(m).is_none() {
-                    break;
+                if d.case {
+                    ca.push(d.sym.cf[ch as usize], b - a - 1);
+                    if ca.dead() {
+                        break;
+                    }
+                } else {
+                    m = if b == a + 1 { d.sym.mask(ch) } else { combine(m, d.sym.mask(ch)) };
+                    if variation(m).is_none() {
+                        break;
+                    }
                 }
                 let f = d.sym.fold[ch as usize];
                 cs.folded.push(f);
                 node = node.and_then(|n| d.tries[0].step(n, f));
+                if d.case {
+                    // the core must be writable from its canonical spelling (a live row's is the same)
+                    // (the lookup only matters for mixed-case spans: without cased chars the mask is 0,
+                    // and an all-lowercase span is always written by lower)
+                    h = seq_step(h, f);
+                    let lookup = ca.hasu != 0 && (ca.up != 0 || ca.trad);
+                    let uc = if lookup { d.canon.get(&h).copied().unwrap_or(0) & ca.hasu } else { 0 };
+                    if ca.best(uc, &[0.0; NVAR_MAX]).is_none() {
+                        continue;
+                    }
+                }
                 let s = &w[b..];
                 if d.classes && !(d.row_ok(1, p) && d.row_ok(0, &cs.folded) && d.row_ok(2, s)) {
                     continue;
@@ -2396,6 +4552,12 @@ fn propose(d: &Dict, x: &[u32], subs: &[(u32, u16, u32)], max_packages: usize, t
                         let (p, l, _) = subs[si];
                         let w = &x[p as usize..p as usize + l as usize];
                         cuts(w, &mut cs);
+                        if !failed.is_empty() {
+                            cs.cuts.retain(|c| c.1[..c.0].iter().all(|&m| {
+                                miss_key(d, w, m, &mut key);
+                                !failed.contains(&key[..])
+                            }));
+                        }
                         let Some(min) = cs.cuts.iter().map(|c| c.0).min() else { continue };
                         let n_good = cs.cuts.iter().filter(|c| c.0 <= min + 1).count();
                         let share = g / n_good as f64;
@@ -2417,25 +4579,63 @@ fn propose(d: &Dict, x: &[u32], subs: &[(u32, u16, u32)], max_packages: usize, t
     // pass 2: each package goes to the cut whose missing rows are most in demand. Choosing the cut
     // (a demand lookup per missing row of every cut) runs on blocks handed out on demand; only the
     // few rows of the chosen cuts are then added up part by part.
-    let contrib: Vec<Vec<(u32, Miss, f64)>> = par_map(vals.len().div_ceil(PB), threads, 1, || (CutScratch::default(), Vec::new(), Vec::new()), |(cs, key, score), b| {
+    // (the direct values below come from the same cuts: collected here, block by block, in the
+    // same order as a separate pass over the packages would)
+    let an = |x: u32| !is_byte(x) && d.sym.alnum.get(x as usize).is_some_and(|&a| a != 0);
+    let both: Vec<(Vec<(u32, Miss, f64)>, Vec<(Vec<u32>, f64)>)> = par_map(vals.len().div_ceil(PB), threads, 1, || (CutScratch::default(), Vec::new(), Vec::new()), |(cs, key, score), b| {
         let mut out = Vec::new();
+        let mut dout = Vec::new();
         for pk in b * PB..((b + 1) * PB).min(vals.len()) {
             let g = vals[pk].0;
             let w = word(pk);
             cuts(w, cs);
+            if use_direct {
+                for c in &cs.cuts {
+                    if c.1[0].t == 0 && c.0 == 1 {
+                        miss_key(d, w, c.1[0], key);
+                        // not a core that swallows the space or punctuation next to a word ( iPhone,
+                        // GitHub.): the affixes carry those, and the bare word is the core
+                        let n = key.len();
+                        let glued = n > 2 && ((!an(key[1]) && an(key[2])) || (!an(key[n - 1]) && an(key[n - 2])));
+                        if !glued && !failed.contains(&key[..]) {
+                            dout.push((key.clone(), g));
+                        }
+                    }
+                }
+            }
             score.clear();
             for c in &cs.cuts {
-                let sum: f64 = c.1[..c.0]
+                let mut hopeless = false;
+                // the cut only happens if all its missing rows are added: its weakest row bounds it
+                // (a sum let one very popular row, core té, carry a one-off partner, possibili)
+                let weakest: f64 = c.1[..c.0]
                     .iter()
                     .map(|&m| {
                         miss_key(d, w, m, key);
-                        demand1[shard_of(key, nsh)].get(&key[..]).copied().unwrap_or(0.0)
+                        let v = demand1[shard_of(key, nsh)].get(&key[..]).copied().unwrap_or(0.0);
+                        if failed.contains(&key[..]) {
+                            hopeless = true;
+                        } else if let Some(&r) = d.tabs[m.t as usize].map.get(&key[1..]) {
+                            hopeless |= !d.tabs[m.t as usize].alive[r as usize] && d.tabs[m.t as usize].price[r as usize] > v;
+                        }
+                        v
                     })
-                    .sum::<f64>();
-                score.push(sum / (c.0 * c.0) as f64);
+                    .fold(f64::INFINITY, f64::min);
+                score.push(if hopeless { -1.0 } else { weakest / c.0 as f64 });
             }
             // the last of equally good cuts, as Iterator::max_by
-            let best = (0..cs.cuts.len()).max_by(|&a, &b| score[a].partial_cmp(&score[b]).unwrap());
+            let best = (0..cs.cuts.len()).max_by(|&a, &b| score[a].partial_cmp(&score[b]).unwrap()).filter(|&b| score[b] >= 0.0);
+            if tr_words.iter().any(|t| t[..] == w[..]) {
+                let name = |m: Miss, key: &mut Vec<u32>| { miss_key(d, w, m, key); format!("{}[{}..{}]", ["core", "pre", "suf"][m.t as usize], m.a, m.b) };
+                let mut lines = Vec::new();
+                for (ci, c) in cs.cuts.iter().enumerate() {
+                    let rows: Vec<String> = c.1[..c.0].iter().map(|&m| { let n = name(m, key); format!("{n} d1={:.0}", demand1[shard_of(key, nsh)].get(&key[..]).copied().unwrap_or(0.0)) }).collect();
+                    lines.push(format!("      cut score {:.0}{}: {}", score[ci], if Some(ci) == best { " <== CHOSEN" } else { "" }, rows.join(" + ")));
+                }
+                eprintln!("    trace package {:?} value {g:.0}, {} cuts:
+{}", w, cs.cuts.len(), lines.join("
+"));
+            }
             if let Some(bi) = best {
                 let c = cs.cuts[bi];
                 for &m in &c.1[..c.0] {
@@ -2443,11 +4643,54 @@ fn propose(d: &Dict, x: &[u32], subs: &[(u32, u16, u32)], max_packages: usize, t
                 }
             }
         }
-        out
+        (out, dout)
     });
-    let demand2 = accumulate(&contrib);
+    let (contrib, direct): (Vec<_>, Vec<_>) = both.into_iter().unzip();
+    let mut demand2 = accumulate(&contrib);
     drop(contrib);
     prof("prop_pass2", tq);
+    let tq = Instant::now();
+    // DIRECT value: a core that alone completes a package (its only missing row; the package is
+    // then one token) is worth at least that package's value, whatever the routing gave it. Shared
+    // short pieces (tou + jo + urs) collect demand from hundreds of packages and win the routing,
+    // so a frequent word (toujours) got almost nothing; the exact re-scoring then checks the real
+    // gain. (Exclusive counts keep mid-word fragments' own values small.) Max over packages.
+    // (each shard's map on its own thread, its keys in the same order as one pass would take them)
+    let mut by_shard: Vec<Vec<(Vec<u32>, f64)>> = (0..nsh).map(|_| Vec::new()).collect();
+    for blk in direct {
+        for (k, g) in blk {
+            by_shard[shard_of(&k, nsh)].push((k, g));
+        }
+    }
+    let n_direct: usize = std::thread::scope(|sc| {
+        let hs: Vec<_> = demand2
+            .iter_mut()
+            .zip(by_shard)
+            .map(|(m, ks)| {
+                sc.spawn(move || {
+                    let mut n = 0usize;
+                    for (k, g) in ks {
+                        match m.get_mut(&k) {
+                            Some(v) => {
+                                if g > *v {
+                                    *v = g;
+                                    n += 1;
+                                }
+                            }
+                            None => {
+                                m.insert(k, g);
+                                n += 1;
+                            }
+                        }
+                    }
+                    n
+                })
+            })
+            .collect();
+        hs.into_iter().map(|h| h.join().unwrap()).sum()
+    });
+    eprintln!("    direct values raised {n_direct} core proposals");
+    prof("prop_direct", tq);
     let tq = Instant::now();
     let rows: Vec<(f64, RowKey)> = demand2.into_iter().flatten().map(|(k, v)| (v, (k[0] as u8, k[1..].to_vec()))).collect();
     prof("prop_sort", tq);
@@ -2468,14 +4711,124 @@ struct CutScratch {
     p_ok: Vec<bool>,
     s_ok: Vec<bool>,
     folded: Vec<u32>,
+    p_tm: Vec<u8>, // case_affixes: transition masks of the prefix w[..a] / suffix w[b..] (0 = unwritable)
+    s_tm: Vec<u8>,
 }
 
-/// Demand-map key of a missing row: [table, symbols..] (cores folded); orders like RowKey.
+/// propose's cuts with case_affixes: every cut w = prefix + core + suffix that one variation
+/// writes as a whole token (the parts' canonical spellings: the rows' if they exist, else the
+/// ones they would get), with its missing rows (all keyed folded)
+fn cuts_ca(d: &Dict, w: &[u32], cs: &mut CutScratch) {
+    let l = w.len();
+    cs.cuts.clear();
+    for v in [&mut cs.p_ok, &mut cs.s_ok] {
+        v.clear();
+        v.resize(l + 1, false);
+    }
+    for v in [&mut cs.p_tm, &mut cs.s_tm] {
+        v.clear();
+        v.resize(l + 1, 0);
+    }
+    cs.p_ok[0] = true;
+    cs.s_ok[l] = true;
+    cs.p_tm[0] = TM_EMPTY;
+    cs.s_tm[l] = TM_EMPTY;
+    let live = |k: usize, n: Option<u32>| {
+        n.is_some_and(|n| {
+            let r = d.tries[k].term(n);
+            r != NONE && d.tabs[k].alive[r as usize]
+        })
+    };
+    let fold = |c: u32| d.sym.fold[c as usize];
+    // every prefix w[..a] and suffix w[b..]: transition mask and whether it is a live row
+    let (mut ca, mut h, mut node) = (CaseAcc::default(), SEQ_H0, Some(0u32));
+    for a in 1..=l {
+        let ch = w[a - 1];
+        ca.push(d.sym.cf[ch as usize], a - 1);
+        if ca.dead() {
+            break;
+        }
+        h = seq_step(h, fold(ch));
+        node = node.and_then(|n| d.tries[1].step(n, fold(ch)));
+        cs.p_ok[a] = live(1, node);
+        cs.p_tm[a] = d.span_tm(&ca, h);
+    }
+    for b in 0..l {
+        let (mut ca, mut h, mut node) = (CaseAcc::default(), SEQ_H0, Some(0u32));
+        let mut dead = false;
+        for (k, &ch) in w[b..].iter().enumerate() {
+            ca.push(d.sym.cf[ch as usize], k);
+            if ca.dead() {
+                dead = true;
+                break;
+            }
+            h = seq_step(h, fold(ch));
+            node = node.and_then(|n| d.tries[2].step(n, fold(ch)));
+        }
+        if !dead {
+            cs.s_ok[b] = live(2, node);
+            cs.s_tm[b] = d.span_tm(&ca, h);
+        }
+    }
+    for a in 0..l {
+        // mark_rule: no core, and no prefix, starts at a combining mark
+        if d.sym.mark_at(w[a]) || (a > 0 && d.sym.mark_at(w[0])) {
+            continue;
+        }
+        let after_p = vs_start(cs.p_tm[a]);
+        if after_p == 0 {
+            continue;
+        }
+        let (mut ca, mut h, mut node) = (CaseAcc::default(), SEQ_H0, Some(0u32));
+        cs.folded.clear();
+        for b in a + 1..=l {
+            let ch = w[b - 1];
+            ca.push(d.sym.cf[ch as usize], b - a - 1);
+            if ca.dead() {
+                break;
+            }
+            let f = fold(ch);
+            cs.folded.push(f);
+            h = seq_step(h, f);
+            node = node.and_then(|n| d.tries[0].step(n, f));
+            let after_c = vs_after(after_p, d.span_tm(&ca, h));
+            if vs_after(after_c, cs.s_tm[b]) == 0 {
+                continue; // no single variation writes this cut
+            }
+            if d.classes {
+                let (p, s): (Vec<u32>, Vec<u32>) = (w[..a].iter().map(|&c| fold(c)).collect(), w[b..].iter().map(|&c| fold(c)).collect());
+                if !(d.row_ok(1, &p) && d.row_ok(0, &cs.folded) && d.row_ok(2, &s)) {
+                    continue;
+                }
+            }
+            let mut miss = [Miss { t: 0, a: 0, b: 0 }; 3];
+            let mut nm = 0;
+            if !cs.p_ok[a] {
+                miss[nm] = Miss { t: 1, a: 0, b: a as u16 };
+                nm += 1;
+            }
+            if !live(0, node) {
+                miss[nm] = Miss { t: 0, a: a as u16, b: b as u16 };
+                nm += 1;
+            }
+            if !cs.s_ok[b] {
+                miss[nm] = Miss { t: 2, a: b as u16, b: l as u16 };
+                nm += 1;
+            }
+            if nm > 0 {
+                cs.cuts.push((nm, miss));
+            }
+        }
+    }
+}
+
+/// Demand-map key of a missing row: [table, symbols..] (cores folded, affixes too with
+/// case_affixes); orders like RowKey.
 fn miss_key(d: &Dict, w: &[u32], m: Miss, key: &mut Vec<u32>) {
     key.clear();
     key.push(m.t as u32);
     let r = &w[m.a as usize..m.b as usize];
-    if m.t == 0 {
+    if m.t == 0 || d.ca {
         key.extend(r.iter().map(|&c| d.sym.fold[c as usize]));
     } else {
         key.extend_from_slice(r);
@@ -2503,18 +4856,7 @@ fn refactor_proposals(d: &Dict, st: &ParseStats, threads: usize) -> Vec<HashMap<
     let tq = Instant::now();
     let (cp, cs) = (&d.tabs[1].cost, &d.tabs[2].cost);
     // legal core spelled by raw: its folded form into f
-    let legal = |raw: &[u32], f: &mut Vec<u32>| -> bool {
-        let mut m = 0u8;
-        f.clear();
-        for (i, &ch) in raw.iter().enumerate() {
-            if is_byte(ch) {
-                return false;
-            }
-            m = if i == 0 { d.sym.mask(ch) } else { combine(m, d.sym.mask(ch)) };
-            f.push(d.sym.fold[ch as usize]);
-        }
-        variation(m).is_some()
-    };
+    let legal = |raw: &[u32], f: &mut Vec<u32>| -> bool { d.legal_core(raw, f) };
     // per block of types: the candidate strings, and per shard (start, len, value) in order
     const G: usize = 4096;
     let blocks: Vec<(Vec<u32>, Vec<Vec<(u32, u32, f64)>>)> = par_map(types.len().div_ceil(G), threads, 1, || (Vec::new(), Vec::new(), Vec::new()), |(raw, f, core), b| {
@@ -2524,10 +4866,19 @@ fn refactor_proposals(d: &Dict, st: &ParseStats, threads: usize) -> Vec<HashMap<
             if t.c == NONE || (t.p == 0 && t.s == 0) {
                 continue;
             }
-            let p = &d.tabs[1].strs[t.p as usize];
+            // the token's text, split into its written prefix, core and suffix (case_affixes: the
+            // variation applies to all three)
             core.clear();
-            core.extend(d.sym.written(&d.tabs[0].strs[t.c as usize], t.v));
-            let s = &d.tabs[2].strs[t.s as usize];
+            let (lp, ls) = (d.tabs[1].strs[t.p as usize].len(), d.tabs[2].strs[t.s as usize].len());
+            if d.ca {
+                d.token_text_into(&t, core);
+            } else {
+                core.extend_from_slice(&d.tabs[1].strs[t.p as usize]);
+                d.write_core(t.c as usize, t.v, core);
+                core.extend_from_slice(&d.tabs[2].strs[t.s as usize]);
+            }
+            let (p, rest) = core.split_at(lp);
+            let (core, s) = rest.split_at(rest.len() - ls);
             let save_p = (cp[t.p as usize] - cp[0]).max(0.0);
             let save_s = (cs[t.s as usize] - cs[0]).max(0.0);
             let (sp, ss) = (&d.tabs[1].spec, &d.tabs[2].spec);
@@ -2539,16 +4890,22 @@ fn refactor_proposals(d: &Dict, st: &ParseStats, threads: usize) -> Vec<HashMap<
             // is charged at its unconditional cost)
             let cond_p = if d.lamc > 0.0 && t.p != 0 { (d.cond(0, t.p, t.c, (-cp[t.p as usize]).exp2()) - cp[0]).max(0.0) } else { 0.0 };
             let cond_s = if d.lamc > 0.0 && t.s != 0 { (d.cond(1, t.c, t.s, (-cs[t.s as usize]).exp2()) - cs[0]).max(0.0) } else { 0.0 };
+            // code_w: the bits of the affix given the core, beyond an empty affix's marginal
+            // (without code_len: the affix's unconditional bits beyond an empty affix's, save_p / save_s)
+            let cw = (d.cl.on && d.cl.w > 0.0) || d.cl.wu > 0.0;
+            let clb_p = if cw && t.p != 0 { if d.cl.on { (d.cl_abits(0, t.p, t.c, cp[t.p as usize]) - cp[0]).max(0.0) } else { save_p } } else { 0.0 };
+            let clb_s = if cw && t.s != 0 { if d.cl.on { (d.cl_abits(1, t.s, t.c, cs[t.s as usize]) - cs[0]).max(0.0) } else { save_s } } else { 0.0 };
             let (gc, gp, gs) = (d.tabs[0].glue[t.c as usize], d.tabs[1].glue[t.p as usize], d.tabs[2].glue[t.s as usize]);
             for kind in 0..3 {
-                let (save, spec, pair, condg, glue) = match kind {
-                    0 if t.p != 0 => (save_p, spec_p, pair_p, cond_p, gc + gp),
-                    1 if t.s != 0 => (save_s, spec_s, pair_s, cond_s, gc + gs),
-                    2 if t.p != 0 && t.s != 0 => (save_p + save_s, spec_p + spec_s, pair_p + pair_s, cond_p + cond_s, gc + gp + gs),
+                let (save, spec, pair, condg, glue, clb) = match kind {
+                    0 if t.p != 0 => (save_p, spec_p, pair_p, cond_p, gc + gp, clb_p),
+                    1 if t.s != 0 => (save_s, spec_s, pair_s, cond_s, gc + gs, clb_s),
+                    2 if t.p != 0 && t.s != 0 => (save_p + save_s, spec_p + spec_s, pair_p + pair_s, cond_p + cond_s, gc + gp + gs, clb_p + clb_s),
                     _ => continue,
                 };
                 let value = n * d.lam * save + n * d.mu * spec + if d.mu2 > 0.0 { n * d.mu2 * pair } else { 0.0 }
-                    + if d.lamc > 0.0 { n * d.lamc * condg } else { 0.0 };
+                    + if d.lamc > 0.0 { n * d.lamc * condg } else { 0.0 }
+                    + if cw { n * d.cl.w * clb } else { 0.0 };
                 if value <= 0.0 && d.nu == 0.0 {
                     continue;
                 }
@@ -2617,7 +4974,7 @@ fn trace_state(d: &Dict, st: &ParseStats, tr: &[Vec<u32>], label: &str) {
     for (i, s) in tr.iter().enumerate() {
         let mut parts = Vec::new();
         for k in 0..3 {
-            let key = if k == 0 { fold_str(d, s) } else { s.clone() };
+            let key = if k == 0 || d.ca { fold_str(d, s) } else { s.clone() };
             if let Some(&r) = d.tabs[k].map.get(&key) {
                 let r = r as usize;
                 parts.push(format!("{}:{} uses {:.0} price {:.1} glue {:.2}", ["core", "pre", "suf"][k],
@@ -2686,9 +5043,9 @@ fn swap_proposals(d: &Dict, st: &ParseStats, threads: usize) -> Vec<Vec<u32>> {
     // The merge sums are sharded by core: every shard scans the types in order and adds up the
     // merges of its own cores, so each key sees its terms in the types' order, exactly as one
     // sequential pass over the types (the result is a sorted set anyway).
-    type Key = (u32, u32, u32); // (core, side x 4 + variation, piece id)
+    type Key = (u32, u32, u32); // (core, side x 8 + variation, piece id)
     let nsh = (4 * threads).max(1);
-    let found: Vec<Vec<Vec<u32>>> = par_map(nsh, threads, 1, || Vec::new(), |raw: &mut Vec<u32>, h| {
+    let found: Vec<Vec<(f64, Vec<u32>)>> = par_map(nsh, threads, 1, || Vec::new(), |raw: &mut Vec<u32>, h| {
         let mut merges: HashMap<Key, (f64, f64), Fast> = HashMap::default();
         for &(t, n) in &types {
             if t.c as usize % nsh != h {
@@ -2696,7 +5053,7 @@ fn swap_proposals(d: &Dict, st: &ParseStats, threads: usize) -> Vec<Vec<u32>> {
             }
             for (side, r) in [(0u32, t.p), (1, t.s)] {
                 for &(pid, whole) in &pieces[side as usize][r as usize] {
-                    let e = merges.entry((t.c, side * 4 + t.v, pid)).or_insert((0.0, 0.0));
+                    let e = merges.entry((t.c, side * 8 + t.v, pid)).or_insert((0.0, 0.0));
                     e.0 += n;
                     if whole {
                         e.1 += n;
@@ -2706,55 +5063,77 @@ fn swap_proposals(d: &Dict, st: &ParseStats, threads: usize) -> Vec<Vec<u32>> {
         }
         let mut out = Vec::new();
         for (&(c, sv, pid), &(n, n_whole)) in &merges {
-            let (side, v) = (sv / 4, sv % 4);
+            let (side, v) = (sv / 8, sv % 8);
             let piece = piece_strs[side as usize][pid as usize];
             let k = if side == 0 { 1 } else { 2 };
             let arow = if n_whole > 0.0 { d.tabs[k].map.get(piece).copied() } else { None };
             // dominated from either side: the core is mostly used with this piece (happines + s),
             // or the whole affix is mostly used with this core (priorit + ize_: once prioritize_
             // exists, priorit is left to priority, which the core side then proposes)
-            let core_dom = n >= 0.5 * uses[0][c as usize];
+            let core_dom = n >= d.pricing.swap_share * uses[0][c as usize];
             let affix_dom = arow.is_some_and(|r| n_whole >= 0.5 * uses[k][r as usize]);
-            if !core_dom && !affix_dom {
+            // SELF-PAYING (swap_self): the merged core saves, on every use where the piece was the
+            // whole affix, that affix's information cost (lambda x its bits + delta). That is what
+            // pruning weighs against the price, so a merge whose saving is above its price would be
+            // kept once added; but it saves no token (Got:t, hi:m, du:e are one token either way),
+            // so no other proposal ever adds it.
+            // (code_w: also w x the affix's bits given the core, beyond an empty affix's marginal)
+            // (without code_len: w x its unconditional bits beyond an empty affix's)
+            let clw = |r: u32| -> f64 {
+                if d.cl.on && d.cl.w > 0.0 {
+                    let ct = &d.tabs[k].cost;
+                    d.cl.w * (d.cl_abits(k - 1, r, c, ct[r as usize]) - ct[0]).max(0.0)
+                } else if d.cl.wu > 0.0 {
+                    let ct = &d.tabs[k].cost;
+                    d.cl.wu * (ct[r as usize] - ct[0]).max(0.0)
+                } else {
+                    0.0
+                }
+            };
+            let self_pay = d.pricing.swap_self > 0.0
+                && arow.is_some_and(|r| n_whole * (d.lam * d.tabs[k].cost[r as usize] + d.delta + clw(r)) > 0.0);
+            if !core_dom && !affix_dom && !self_pay {
                 continue;
             }
             raw.clear();
-            if side == 0 {
-                raw.extend_from_slice(piece);
-            }
-            raw.extend(d.sym.written(&d.tabs[0].strs[c as usize], v));
-            if side == 1 {
-                raw.extend_from_slice(piece);
-            }
-            let mut m = 0u8;
-            let mut f = Vec::with_capacity(raw.len());
-            let mut ok = true;
-            for (i, &ch) in raw.iter().enumerate() {
-                if is_byte(ch) {
-                    ok = false;
-                    break;
+            if d.ca {
+                // (the piece with its own canonical spelling, the variation over both)
+                let (pc, cr) = ((piece, d.canon_mask(piece)), (&d.tabs[0].strs[c as usize][..], d.tabs[0].umask[c as usize]));
+                d.write_parts(&if side == 0 { [pc, cr] } else { [cr, pc] }, side == 0, v, raw);
+            } else {
+                if side == 0 {
+                    raw.extend_from_slice(piece);
                 }
-                m = if i == 0 { d.sym.mask(ch) } else { combine(m, d.sym.mask(ch)) };
-                f.push(d.sym.fold[ch as usize]);
+                d.write_core(c as usize, v, raw);
+                if side == 1 {
+                    raw.extend_from_slice(piece);
+                }
             }
-            if !ok || variation(m).is_none() || d.tabs[0].has(&f) || !d.row_ok(0, &f) {
+            let mut f = Vec::with_capacity(raw.len());
+            if !d.legal_core(raw, &mut f) || d.tabs[0].has(&f) || !d.row_ok(0, &f) {
                 continue;
             }
             // freed: the core's price in proportion to the uses that move, plus the piece's own price
             // (as an affix row) for the uses where it was the whole affix
             let piece_price = d.tabs[k].map.get(piece).map_or(0.0, |&r| n_whole / uses[k][r as usize].max(1e-9) * d.tabs[k].price[r as usize]);
             let freed = n / uses[0][c as usize] * d.tabs[0].price[c as usize] + piece_price;
-            if freed > d.price_of(0, &f) {
-                out.push(f);
+            let saving = arow.map_or(0.0, |r| n_whole * (d.lam * d.tabs[k].cost[r as usize] + d.delta + clw(r)));
+            let pf = d.price_of(0, &f).max(1e-9);
+            let by_freed = (core_dom || affix_dom) && freed > pf;
+            let by_self = d.pricing.swap_self > 0.0 && saving > d.pricing.swap_self * pf;
+            if by_freed || by_self {
+                // value: how many times over the merge pays its price (freed merges first)
+                out.push((if by_freed { f64::INFINITY } else { saving / pf }, f));
             }
         }
         out
     });
     prof("sw_merge", tq);
-    let mut v: Vec<Vec<u32>> = found.into_iter().flatten().collect();
-    v.sort_unstable();
-    v.dedup();
-    v
+    // best first (ties by string, a total order); a merge found from several pieces keeps its best
+    let mut v: Vec<(f64, Vec<u32>)> = found.into_iter().flatten().collect();
+    v.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap().then_with(|| a.1.cmp(&b.1)));
+    let mut seen: std::collections::HashSet<Vec<u32>, Fast> = Default::default();
+    v.into_iter().filter(|(_, f)| seen.insert(f.clone())).map(|(_, f)| f).collect()
 }
 
 // ------------------------------------------------------------------ exact candidate scoring
@@ -2762,7 +5141,8 @@ fn swap_proposals(d: &Dict, st: &ParseStats, threads: usize) -> Vec<Vec<u32>> {
 /// Exact gain of each candidate row on its own: sum over segments containing it of
 /// f(x) (J_D(x) - J_{D+row}(x)), from up to `occ` sampled segments, scaled to all of them.
 fn exact_gains(d: &Dict, c: &Corpus, base: &[f64], cands: &[RowKey], occ: usize, threads: usize) -> Vec<f64> {
-    // tries over the candidate strings: raw text for affixes, folded text for cores
+    // tries over the candidate strings: raw text for affixes (folded with case_affixes), folded
+    // text for cores
     let tq = Instant::now();
     let tries: [Trie; 2] = [0, 1].map(|k| {
         Trie::from_strs(cands.iter().filter(|(t, _)| (*t == 0) == (k == 1)).map(|(_, s)| (&s[..], 0)).collect())
@@ -2798,7 +5178,7 @@ fn exact_gains(d: &Dict, c: &Corpus, base: &[f64], cands: &[RowKey], occ: usize,
                         if is_byte(ch) {
                             break;
                         }
-                        let sym = if k == 1 { d.sym.fold[ch as usize] } else { ch };
+                        let sym = if k == 1 || d.ca { d.sym.fold[ch as usize] } else { ch };
                         let Some(m) = tries[k].step(n, sym) else { break };
                         n = m;
                         hits.extend(&term[k][n as usize]);
@@ -2887,19 +5267,26 @@ fn exact_gains(d: &Dict, c: &Corpus, base: &[f64], cands: &[RowKey], occ: usize,
         .collect();
     prof("eg_median", tq);
     let tq = Instant::now();
-    // Long segments (whole paragraphs): segment by segment, the plain parse once, then every
-    // candidate sampled there re-scored by parse_x_window, which re-runs only the DP around its
-    // occurrences. Same values as the full re-parses below (see parse_x_window), so the choice is
-    // only about speed; short segments (chunks) are cheaper to re-parse whole.
+    // Segment by segment, the plain parse once, then every candidate sampled there re-scored
+    // from it: long segments (whole paragraphs) by parse_x_window, which re-runs only the DP around
+    // its occurrences, short ones (chunks) by resuming the plain DP's state where its arcs first
+    // change a score (see exact_gains_windowed). Same values as the full re-parses below, so the
+    // choice is only about speed.
     let mean_len = c.segs.iter().map(|s| s.len()).sum::<usize>() as f64 / ns.max(1) as f64;
-    if d.mu2 == 0.0 && d.lamc == 0.0 && mean_len >= WINDOW_MIN_LEN {
-        let r = exact_gains_windowed(d, c, base, cands, &tries, &term, &post_of, &med, &med_spec, threads);
+    if d.cl.on {
+        let r = exact_gains_pair(d, c, base, cands, &post_of, &med, &med_spec, threads);
+        prof("eg_score", tq);
+        return r;
+    }
+    if d.mu2 == 0.0 && d.lamc == 0.0 {
+        let r = exact_gains_windowed(d, c, base, cands, &tries, &term, &post_of, &med, &med_spec, threads, mean_len < WINDOW_MIN_LEN);
         prof("eg_score", tq);
         return r;
     }
     let r = par_map(cands.len(), threads, 4, Scratch::new, |sc, i| {
         let (t, st) = &cands[i];
-        let e = Extra { t: *t as usize, s: st.clone(), cost: med[*t as usize], spec: med_spec[*t as usize], usec: d.usec_of(*t as usize, st) };
+        let e = Extra { t: *t as usize, s: st.clone(), cost: med[*t as usize], spec: med_spec[*t as usize], usec: d.usec_of(*t as usize, st),
+                        umask: if *t == 0 || d.ca { d.canon_mask(st) } else { 0 } };
         let mut g = 0.0;
         for (si, w) in post_of(i) {
             let f = c.freqs[si as usize];
@@ -2912,26 +5299,28 @@ fn exact_gains(d: &Dict, c: &Corpus, base: &[f64], cands: &[RowKey], occ: usize,
     r
 }
 
-/// exact_gains switches to windowed re-scoring when segments are this long on average (chars).
+/// exact_gains uses windowed re-scoring when segments are this long on average (chars), else the
+/// resumed DP.
 const WINDOW_MIN_LEN: f64 = 48.0;
 
-type WinScratch = (Arcs, [Vec<(f64, f64)>; 3], [Vec<(f64, f64)>; 3], [Vec<Back>; 3], Vec<(u32, u32)>, Vec<u32>);
+type WinScratch = (Arcs, [Vec<(f64, f64)>; 3], [Vec<(f64, f64)>; 3], [Vec<Back>; 3], Vec<(u32, u32)>, Vec<u32>, [Vec<(f64, f64)>; 3]);
 
 /// The last step of exact_gains for parse_x (mu2 = lamc = 0), by segment instead of by candidate:
-/// the same values (parse_x_window), summed per candidate in the same order.
+/// the same values (parse_x_window, or with `snap` the resumed DP for segments of up to 256 chars),
+/// summed per candidate in the same order.
 #[allow(clippy::too_many_arguments)]
 fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, base: &[f64], cands: &[RowKey], tries: &[Trie; 2],
                                                          term: &[Vec<Vec<u32>>; 2], post_of: &(impl Fn(usize) -> P + Sync),
-                                                         med: &[f64], med_spec: &[f64], threads: usize) -> Vec<f64> {
+                                                         med: &[f64], med_spec: &[f64], threads: usize, snap: bool) -> Vec<f64> {
     let ns = c.segs.len();
     let extras: Vec<Extra> = cands
         .iter()
-        .map(|(t, s)| Extra { t: *t as usize, s: s.clone(), cost: med[*t as usize], spec: med_spec[*t as usize], usec: d.usec_of(*t as usize, s) })
+        .map(|(t, s)| Extra { t: *t as usize, s: s.clone(), cost: med[*t as usize], spec: med_spec[*t as usize], usec: d.usec_of(*t as usize, s),
+                              umask: if *t == 0 || d.ca { d.canon_mask(s) } else { 0 } })
         .collect();
-    let lmax = d.max_arc(0);
     let mut out = Vec::with_capacity(cands.len());
     // candidates in batches of about BATCH postings, so memory stays bounded
-    const BATCH: usize = 1 << 23;
+    const BATCH: usize = 1 << 24;
     let mut lo = 0;
     while lo < cands.len() {
         // the batch's postings, candidate by candidate: (segment, weight, candidate)
@@ -2948,35 +5337,200 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
         let by_seg = Csr::new(ns, post.iter().map(|p| Some(p.0)));
         let segs: Vec<u32> = (0..ns as u32).filter(|&si| !by_seg.get(si as usize).is_empty()).collect();
         let new_ws = || -> WinScratch { Default::default() };
-        let js: Vec<Vec<f64>> = par_map(segs.len(), threads, 1, new_ws, |(arcs, fin, w, nob, hits, occ): &mut WinScratch, q| {
+        let js: Vec<Vec<f64>> = par_map(segs.len(), threads, 1, new_ws, |(arcs, fin, w, nob, hits, occ, snaps): &mut WinScratch, q| {
             let si = segs[q] as usize;
             let x = &c.segs[si];
             let ps = by_seg.get(si);
-            // occurrences of the sampled candidates: (index in ps, start), as exact_gains finds them
+            // occurrences of the sampled candidates: (index in ps, start), sorted, as exact_gains
+            // finds them (its tries: cores folded, affixes raw unless case_affixes; no byte); in a
+            // short text by matching each sampled candidate's string directly
             hits.clear();
-            for i in 0..x.len() {
-                for k in 0..2 {
-                    let mut n = 0u32;
-                    for &ch in &x[i..] {
-                        if is_byte(ch) {
-                            break;
+            if x.len() <= 256 {
+                for (r, &p) in ps.iter().enumerate() {
+                    let (t, cs) = &cands[post[p as usize].2 as usize];
+                    let raw = *t != 0 && !d.ca;
+                    let l = cs.len();
+                    if l == 0 || l > x.len() {
+                        continue;
+                    }
+                    for i in 0..=x.len() - l {
+                        let ok = x[i..i + l].iter().zip(cs).all(|(&ch, &c)| !is_byte(ch) && (if raw { ch } else { d.sym.fold[ch as usize] }) == c);
+                        if ok {
+                            hits.push((r as u32, i as u32));
                         }
-                        let sym = if k == 1 { d.sym.fold[ch as usize] } else { ch };
-                        let Some(m) = tries[k].step(n, sym) else { break };
-                        n = m;
-                        for &ci in &term[k][n as usize] {
-                            if (lo as u32..hi as u32).contains(&ci) {
-                                if let Ok(r) = ps.binary_search_by_key(&ci, |&p| post[p as usize].2) {
-                                    hits.push((r as u32, i as u32));
+                    }
+                }
+            } else {
+                for i in 0..x.len() {
+                    for k in 0..2 {
+                        let mut n = 0u32;
+                        for &ch in &x[i..] {
+                            if is_byte(ch) {
+                                break;
+                            }
+                            let sym = if k == 1 || d.ca { d.sym.fold[ch as usize] } else { ch };
+                            let Some(m) = tries[k].step(n, sym) else { break };
+                            n = m;
+                            for &ci in &term[k][n as usize] {
+                                if (lo as u32..hi as u32).contains(&ci) {
+                                    if let Ok(r) = ps.binary_search_by_key(&ci, |&p| post[p as usize].2) {
+                                        hits.push((r as u32, i as u32));
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                hits.sort_unstable();
             }
-            hits.sort_unstable();
             // the plain parse, from the text's arcs (walked once for all its candidates)
             d.arcs_x(x, arcs);
+            if snap && x.len() <= 256 {
+                // Short segments. The DP with e does exactly what the plain DP does as long as none
+                // of e's arcs wins a relaxation (extra_wins): so where that never happens its score
+                // is the plain parse's, fin[0][n], and otherwise its state just before the first
+                // position a whose e arcs win is the plain DP's state then. The plain DP runs once
+                // from the arcs, testing e's arcs at each of its occurrences as step_x would relax
+                // them, and keeps its pending scores (positions >= a; earlier ones are never read
+                // again) at every such a; the DP with e then runs on from there: the same operations
+                // in the same order as parse_x(x, extra = e), so bit-identical. It stops early, as
+                // parse_x_window does, once it is past e's last occurrence and its arcs and the final
+                // scores of all positions with arcs into the rest equal the plain parse's (the rest
+                // is then the plain DP, whose score is fin[0][n]).
+                let n = x.len();
+                const NOT: u32 = u32::MAX;
+                // occurrences (position, index in ps), by position; per posting its last one
+                let mut occs: Vec<(u32, u32)> = hits.iter().map(|&(r, i)| (i, r)).collect();
+                occs.sort_unstable();
+                occs.dedup();
+                let mut last = vec![0u32; ps.len()];
+                for &(i, r) in &occs {
+                    last[r as usize] = last[r as usize].max(i);
+                }
+                let mut won = vec![NOT; ps.len()];
+                for s in 0..3 {
+                    fin[s].clear();
+                    fin[s].resize((n + 1) * d.wid(s), INF);
+                    snaps[s].clear();
+                }
+                fin[0][0] = (0.0, 0.0);
+                // the plain DP to the end, keeping its pending scores at every position i where some
+                // posting's e first wins (at: (i, start in snaps in units of positions)). Only
+                // positions i .. i + lx - 1 can have any at time i (lx = the longest arc of the
+                // text): the rest are still INF.
+                let lx = (0..n)
+                    .map(|i| arcs.arcs[arcs.start[3 * i] as usize..arcs.start[3 * i + 3] as usize].iter().map(|a| a.0 as usize - i).max().unwrap_or(0))
+                    .max()
+                    .unwrap_or(0)
+                    .max(1);
+                let span = |i: usize| (i + lx - 1).min(n) - i + 1;
+                let mut at: Vec<(u32, usize)> = Vec::new();
+                let mut o = 0;
+                for i in 0..=n {
+                    let o0 = o;
+                    while o < occs.len() && occs[o].0 as usize == i {
+                        o += 1;
+                    }
+                    let open = occs[o0..o].iter().any(|&(_, r)| won[r as usize] == NOT);
+                    let start = snaps[0].len();
+                    if open {
+                        for s in 0..3 {
+                            let k = d.wid(s);
+                            let (src, dst) = (&fin[s], &mut snaps[s]);
+                            dst.extend_from_slice(&src[i * k..(i + span(i)) * k]);
+                        }
+                    }
+                    let mut any = false;
+                    let occ_i = &occs[o0..o];
+                    let won_ref = &mut won;
+                    d.step_xp::<false>(x, i, fin, nob, 0, None, None, true, Some(arcs), |dd| {
+                        for &(_, r) in occ_i {
+                            if won_ref[r as usize] == NOT {
+                                let e = &extras[post[ps[r as usize] as usize].2 as usize];
+                                if d.extra_wins(x, i, dd, 0, e) {
+                                    won_ref[r as usize] = i as u32;
+                                    any = true;
+                                }
+                            }
+                        }
+                    });
+                    if any {
+                        at.push((i as u32, start));
+                    } else if open {
+                        for s in 0..3 {
+                            let k = d.wid(s);
+                            snaps[s].truncate(start * k);
+                        }
+                    }
+                }
+                let same = |w: &[Vec<(f64, f64)>; 3], p: usize, off: usize| {
+                    (0..3).all(|s| {
+                        let k = d.wid(s);
+                        (0..k).all(|v| {
+                            let (a, b) = (w[s][(p - off) * k + v], fin[s][p * k + v]);
+                            a.0.to_bits() == b.0.to_bits() && a.1.to_bits() == b.1.to_bits()
+                        })
+                    })
+                };
+                // minsrc[t] = the first position with an arc (a byte, or a trie arc) reaching t or
+                // beyond: the pending scores at time t depend only on the final scores of
+                // positions minsrc[t] .. t - 1 (and on e's arcs)
+                let mut minsrc = vec![0u32; n + 1];
+                {
+                    let maxreach = |i: usize| {
+                        arcs.arcs[arcs.start[3 * i] as usize..arcs.start[3 * i + 3] as usize].iter().map(|a| a.0 as usize).max().unwrap_or(0).max(i + 1)
+                    };
+                    let (mut i, mut mr) = (0usize, maxreach(0));
+                    for t in 1..=n {
+                        while mr < t {
+                            i += 1;
+                            mr = maxreach(i);
+                        }
+                        minsrc[t] = i as u32;
+                    }
+                }
+                let plain = fin[0][n].0;
+                let mut res = vec![plain; ps.len()];
+                for r in 0..ps.len() {
+                    if won[r] == NOT {
+                        continue; // e never wins: the plain parse
+                    }
+                    let (a, z) = (won[r] as usize, last[r] as usize);
+                    let q = at.partition_point(|p| (p.0 as usize) < a);
+                    let e = &extras[post[ps[r] as usize].2 as usize];
+                    let base = at[q].1;
+                    for s in 0..3 {
+                        let k = d.wid(s);
+                        w[s].clear();
+                        w[s].extend_from_slice(&snaps[s][base * k..(base + span(a)) * k]);
+                        w[s].resize((n - a + 1) * k, INF);
+                    }
+                    let reach = z + e.s.len();
+                    // run = number of consecutive positions just processed (ending at i) whose final
+                    // scores equal the plain parse's (those before a all do)
+                    let mut run = a;
+                    let mut i = a;
+                    res[r] = loop {
+                        d.step_x::<false>(x, i, w, nob, a, None, Some(e), true, Some(arcs));
+                        if i == n {
+                            break w[0][n - a].0;
+                        }
+                        run = if same(w, i, a) { run + 1 } else { 0 };
+                        i += 1;
+                        if i > z && reach < i && run >= i - minsrc[i] as usize {
+                            break plain; // rejoined at time i
+                        }
+                    };
+                }
+                return res;
+            }
+            // the longest arc of this text (walks and a byte): bounds how far back the pending
+            // scores at any time come from, so parse_x_window may use it for lmax
+            let seg_lmax = (0..x.len())
+                .map(|i| arcs.arcs[arcs.start[3 * i] as usize..arcs.start[3 * i + 3] as usize].iter().map(|a| a.0 as usize - i).max().unwrap_or(0))
+                .max()
+                .unwrap_or(0)
+                .max(1);
             d.scores_x(x, arcs, fin, nob);
             let mut h = 0;
             (0..ps.len())
@@ -2987,7 +5541,7 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
                         h += 1;
                     }
                     let e = &extras[post[ps[r] as usize].2 as usize];
-                    d.parse_x_window(x, arcs, fin, occ, lmax.max(e.s.len()), e, w, nob)
+                    d.parse_x_window(x, arcs, fin, occ, seg_lmax.max(e.s.len()), e, w, nob)
                 })
                 .collect()
         });
@@ -3011,6 +5565,139 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
         }
         lo = hi;
     }
+    out
+}
+
+/// The last step of exact_gains with code_len (the pairwise DP), by segment: every sampled
+/// segment is parsed once, and a candidate is re-parsed with its row only where its arcs would
+/// change a score (Dict::extra_pair_wins); elsewhere its score is the plain parse's. Summed per
+/// candidate in the postings' order, as exact_gains_windowed.
+fn exact_gains_pair<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, base: &[f64], cands: &[RowKey],
+                                                     post_of: &(impl Fn(usize) -> P + Sync), med: &[f64], med_spec: &[f64],
+                                                     threads: usize) -> Vec<f64> {
+    let ns = c.segs.len();
+    let extras: Vec<Extra> = cands
+        .iter()
+        .map(|(t, s)| Extra { t: *t as usize, s: s.clone(), cost: med[*t as usize], spec: med_spec[*t as usize], usec: d.usec_of(*t as usize, s),
+                              umask: if *t == 0 || d.ca { d.canon_mask(s) } else { 0 } })
+        .collect();
+    let mut out = Vec::with_capacity(cands.len());
+    // the longest arc of any row (every pending entry at a position lies within this of the
+    // positions already processed)
+    let lmax = (0..3).flat_map(|k| d.tabs[k].strs.iter().map(|s| s.len())).max().unwrap_or(1).max(1);
+    // do two parse_pair states hold the same entries at position p (all that later positions read)?
+    let pair_same = |a: &Scratch, b: &Scratch, p: usize| -> bool {
+        let eq = |x: (f64, f64), y: (f64, f64)| x.0.to_bits() == y.0.to_bits() && x.1.to_bits() == y.1.to_bits();
+        eq(a.bs[p], b.bs[p])
+            && a.pe[p].len() == b.pe[p].len()
+            && a.pe[p].iter().zip(&b.pe[p]).all(|(x, y)| x.pid == y.pid && x.vs == y.vs && eq(x.s, y.s))
+            && a.ce[p].len() == b.ce[p].len()
+            && a.ce[p].iter().zip(&b.ce[p]).all(|(x, y)| x.cid == y.cid && x.v == y.v && x.vs == y.vs && eq(x.s, y.s))
+    };
+    const BATCH: usize = 1 << 24;
+    let mut lo = 0;
+    let (mut n_post, n_full) = (0usize, std::sync::atomic::AtomicUsize::new(0));
+    while lo < cands.len() {
+        let mut post: Vec<(u32, f64, u32)> = Vec::new();
+        let mut ends: Vec<usize> = Vec::new();
+        let mut hi = lo;
+        while hi < cands.len() && (hi == lo || post.len() < BATCH) {
+            post.extend(post_of(hi).map(|(si, w)| (si, w, hi as u32)));
+            ends.push(post.len());
+            hi += 1;
+        }
+        n_post += post.len();
+        let by_seg = Csr::new(ns, post.iter().map(|p| Some(p.0)));
+        let segs: Vec<u32> = (0..ns as u32).filter(|&si| !by_seg.get(si as usize).is_empty()).collect();
+        type PairScratch = (Scratch, Scratch, Vec<(usize, u32, u8, f64, f64)>, Vec<(usize, u32, f64, f64, u8)>);
+        let new_ps = || -> PairScratch { (Scratch::new(), Scratch::new(), Vec::new(), Vec::new()) };
+        let n_full = &n_full;
+        let js: Vec<Vec<f64>> = par_map(segs.len(), threads, 1, new_ps, |(sc, sc2, cm, sm): &mut PairScratch, q| {
+            let si = segs[q] as usize;
+            let x = &c.segs[si];
+            let n = x.len();
+            let ps = by_seg.get(si);
+            // every posting's first and last position where its row has arcs
+            let occ: Vec<Option<(usize, usize)>> = ps
+                .iter()
+                .map(|&p| {
+                    let e = &extras[post[p as usize].2 as usize];
+                    let mut it = (0..n).filter(|&i| d.extra_fits(x, i, e));
+                    let a = it.next()?;
+                    Some((a, it.last().unwrap_or(a)))
+                })
+                .collect();
+            let mut firsts: Vec<usize> = occ.iter().flatten().map(|o| o.0).collect();
+            firsts.sort_unstable();
+            firsts.dedup();
+            let lmax = if firsts.is_empty() { lmax } else { d.longest_arc(x) };
+            // the plain parse (exactly parse_pair), keeping its pending state (the entries of every
+            // position the arcs of the positions before can reach) at every first position
+            type Snap = (Vec<(f64, f64)>, Vec<Vec<PEnt>>, Vec<Vec<CEnt>>);
+            let mut snaps: Vec<Snap> = Vec::with_capacity(firsts.len());
+            d.pair_init(n, sc);
+            let mut f = 0;
+            for i in 0..=n {
+                if f < firsts.len() && firsts[f] == i {
+                    let hi = (i + lmax).min(n);
+                    snaps.push((sc.bs[i..=hi].to_vec(), sc.pe[i..=hi].to_vec(), sc.ce[i..=hi].to_vec()));
+                    f += 1;
+                }
+                d.pair_step(x, i, sc, None, None);
+            }
+            let plain = d.pair_finish(x, sc, None).0;
+            ps.iter()
+                .zip(&occ)
+                .map(|(&p, o)| {
+                    let e = &extras[post[p as usize].2 as usize];
+                    let Some((a, z)) = *o else { return plain };
+                    if !d.extra_pair_wins(x, sc, e, cm, sm) {
+                        return plain;
+                    }
+                    n_full.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    // parse_pair(x, extra = e): the same DP as the plain one until position a, e's
+                    // first, so it resumes from the plain one's pending state there; and once past
+                    // e's last arcs, if the final entries of every position whose arcs reach further
+                    // are the plain parse's, the rest is the plain DP too (its score is plain)
+                    let (bs, pe, ce) = &snaps[firsts.binary_search(&a).unwrap()];
+                    d.pair_init(n, sc2);
+                    for (k, q) in (a..).zip(0..bs.len()) {
+                        sc2.bs[k] = bs[q];
+                        sc2.pe[k].clone_from(&pe[q]);
+                        sc2.ce[k].clone_from(&ce[q]);
+                    }
+                    let reach = z + e.s.len();
+                    for i in a..=n {
+                        d.pair_step(x, i, sc2, None, Some(e));
+                        if i >= reach && i < n && (a.max((i + 1).saturating_sub(lmax))..=i).all(|p| pair_same(sc2, sc, p)) {
+                            return plain;
+                        }
+                    }
+                    d.pair_finish(x, sc2, None).0
+                })
+                .collect()
+        });
+        let mut jv = vec![0.0f64; post.len()];
+        for (q, &si) in segs.iter().enumerate() {
+            for (&p, &j) in by_seg.get(si as usize).iter().zip(&js[q]) {
+                jv[p as usize] = j;
+            }
+        }
+        let mut a = 0;
+        for (i, &b) in (lo..hi).zip(&ends) {
+            let mut g = 0.0;
+            for p in a..b {
+                let (si, w, _) = post[p];
+                let f = c.freqs[si as usize];
+                g += w * f * (base[si as usize] - jv[p]).max(0.0);
+            }
+            a = b;
+            let (t, st) = &cands[i];
+            out.push(g - d.price_of(*t as usize, st));
+        }
+        lo = hi;
+    }
+    eprintln!("    (code_len re-scoring: {} of {n_post} sampled (candidate, segment) pairs re-parsed with the row)", n_full.load(std::sync::atomic::Ordering::Relaxed));
     out
 }
 
@@ -3046,7 +5733,9 @@ impl Reader {
         (0..n).map(|_| self.u32()).collect()
     }
     fn symbols(&mut self, n: usize) -> Symbols {
-        Symbols { fold: self.u32s(n), flag: self.u32s(n), upper_of: self.u32s(n), trad_of: self.u32s(n), nbytes: vec![], alnum: vec![] }
+        let mut s = Symbols { fold: self.u32s(n), flag: self.u32s(n), upper_of: self.u32s(n), trad_of: self.u32s(n), nbytes: vec![], alnum: vec![], cf: vec![], mark_rule: false };
+        s.init_case();
+        s
     }
     fn table(&mut self) -> Vec<Vec<u32>> {
         let n = self.u32() as usize;
@@ -3075,17 +5764,33 @@ fn put(w: &mut impl Write, xs: &[u32]) {
 
 fn save(d: &Dict, n_sym: usize, path: &str) {
     let mut w = BufWriter::new(std::fs::File::create(path).expect("create model"));
+    if d.case {
+        put(&mut w, &[if d.ca { CAFX_MAGIC } else { CASE_MAGIC }]);
+    }
     put(&mut w, &[n_sym as u32]);
     for a in [&d.sym.fold, &d.sym.flag, &d.sym.upper_of, &d.sym.trad_of] {
         put(&mut w, a);
     }
     let keep: Vec<Vec<usize>> =
         (0..3).map(|k| (0..d.tabs[k].strs.len()).filter(|&i| d.tabs[k].alive[i]).collect()).collect();
+    let mut can = Vec::new();
     for k in 0..3 {
         put(&mut w, &[keep[k].len() as u32]);
         for &i in &keep[k] {
             put(&mut w, &[d.tabs[k].strs[i].len() as u32]);
-            put(&mut w, &d.tabs[k].strs[i]);
+            if k == 0 && d.case {
+                // the canonical spelling (variation 0)
+                can.clear();
+                d.write_core(i, 0, &mut can);
+                put(&mut w, &can);
+            } else if d.ca {
+                // case_affixes: affixes store their canonical spellings too
+                can.clear();
+                d.write_parts(&[(&d.tabs[k].strs[i], d.tabs[k].umask[i])], false, 0, &mut can);
+                put(&mut w, &can);
+            } else {
+                put(&mut w, &d.tabs[k].strs[i]);
+            }
         }
     }
     for k in 0..3 {
@@ -3093,7 +5798,7 @@ fn save(d: &Dict, n_sym: usize, path: &str) {
             w.write_all(&d.tabs[k].cost[i].to_le_bytes()).unwrap();
         }
     }
-    for c in d.vcost {
+    for c in &d.vcost[..d.nvar()] {
         w.write_all(&c.to_le_bytes()).unwrap();
     }
     w.write_all(&d.delta.to_le_bytes()).unwrap();
@@ -3147,6 +5852,96 @@ fn save(d: &Dict, n_sym: usize, path: &str) {
             w.write_all(&d.tabs[k].glue[i].to_le_bytes()).unwrap();
         }
     }
+    if d.sym.mark_rule {
+        put(&mut w, &[MARK_MAGIC]);
+        put(&mut w, &d.sym.alnum);
+    }
+    if !d.cl.on && d.cl.wu > 0.0 {
+        // code_w without code_len: only w and the bits per fallback byte
+        put(&mut w, &[CODE_MAGIC, 0]);
+        w.write_all(&d.cl.wu.to_le_bytes()).unwrap();
+        w.write_all(&d.cl.byte.to_le_bytes()).unwrap();
+    }
+    if d.cl.on {
+        // code length statistics (live rows renumbered; pairs of dead rows dropped)
+        put(&mut w, &[CODE_MAGIC, 1]);
+        w.write_all(&d.cl.w.to_le_bytes()).unwrap();
+        w.write_all(&d.cl.byte.to_le_bytes()).unwrap();
+        // (all values are multiples of 1/1024 bit below 64: u16, exact)
+        let q16 = |v: f32| ((v as f64 * CL_Q).round() as u16).to_le_bytes();
+        for &i in &keep[0] {
+            for b in d.cl.bo.get(i).copied().unwrap_or([0.0; 3]) {
+                w.write_all(&q16(b)).unwrap();
+            }
+        }
+        let mut buf: Vec<u8> = Vec::new();
+        for k in 0..3 {
+            // (core, affix, bits) with the new ids, by core then affix
+            let mut rows: Vec<(u32, u32, f32)> = d.cl.pair[k]
+                .iter()
+                .filter_map(|(&(a, b), &v)| {
+                    Some(match k {
+                        0 => (*new_id[0].get(&b)?, *new_id[1].get(&a)?, v),
+                        1 => (*new_id[0].get(&a)?, *new_id[2].get(&b)?, v),
+                        _ => (*new_id[0].get(&a)?, b, v),
+                    })
+                })
+                .collect();
+            rows.sort_by(|x, y| (x.0, x.1).cmp(&(y.0, y.1)));
+            // per core row: varint count, then per pair varint affix-id gap and u16 bits
+            buf.clear();
+            let mut r = 0;
+            for c in 0..keep[0].len() as u32 {
+                let from = r;
+                while r < rows.len() && rows[r].0 == c {
+                    r += 1;
+                }
+                put_var(&mut buf, (r - from) as u32);
+                let mut prev = 0u32;
+                for (j, &(_, a, v)) in rows[from..r].iter().enumerate() {
+                    put_var(&mut buf, if j == 0 { a } else { a - prev - 1 });
+                    buf.extend_from_slice(&q16(v));
+                    prev = a;
+                }
+            }
+            put(&mut w, &[buf.len() as u32]);
+            w.write_all(&buf).unwrap();
+        }
+    }
+}
+
+/// LEB128 varint
+fn put_var(buf: &mut Vec<u8>, mut x: u32) {
+    while x >= 0x80 {
+        buf.push((x as u8) | 0x80);
+        x >>= 7;
+    }
+    buf.push(x as u8);
+}
+
+/// LEB128 varint at buf[*at..]
+fn get_var(buf: &[u8], at: &mut usize) -> u32 {
+    let (mut x, mut sh) = (0u32, 0);
+    loop {
+        let b = buf[*at];
+        *at += 1;
+        x |= ((b & 0x7f) as u32) << sh;
+        if b < 0x80 {
+            return x;
+        }
+        sh += 7;
+    }
+}
+
+/// code_len: the dense per-core variation bits from the backoff offsets and the observed pairs
+/// (exactly as update_codelen builds them)
+fn codelen_vb(bo: &[[f32; 3]], pair: &HashMap<(u32, u32), f32, Fast>, vcost: &[f64; NVAR_MAX], nv: usize) -> Vec<[f64; NVAR_MAX]> {
+    let mut vb: Vec<[f64; NVAR_MAX]> =
+        bo.iter().map(|b| std::array::from_fn(|v| if v < nv { vcost[v] + b[2] as f64 } else { f64::INFINITY })).collect();
+    for (&(c, v), &b) in pair {
+        vb[c as usize][v as usize] = b as f64;
+    }
+    vb
 }
 
 // ------------------------------------------------------------------ main loops
@@ -3191,31 +5986,64 @@ fn train(args: &[String]) {
     let min_gain = r.u32() as f64;
     let rare = r.u32() as f64 / 1000.0;
     let partner_n0 = r.u32() as f64;
-    let train = r.corpus(true);
+    let sample_t = r.u32() as f64;
+    let fine_rounds = r.u32() as usize;
+    let coarse_gain = r.u32() as f64;
+    let sig_k = r.u32() as f64;
+    let sig_share = r.u32() as f64 / 1000.0;
+    let swap_share = r.u32() as f64 / 1000.0;
+    let case = r.u32() != 0;
+    sym.mark_rule = r.u32() != 0;
+    let sig_soft = r.u32() != 0;
+    let swap_self = r.u32() as f64 / 1000.0;
+    let ca = r.u32() != 0;
+    assert!(!ca || case, "case_affixes needs case_cores");
+    let code_len = r.u32();
+    let code_w = r.u32() as f64 / 1000.0;
+    let code_beta = r.u32() as f64 / 1000.0;
+    let prune_reuse = r.u32() != 0;
+    let prune_tail = r.u32() as f64 / 1e6;
+    assert!(code_len <= 1, "code_len is 0 or 1");
+    // code_w without code_len: w x the unconditional bits on the 3-state DP (no pairwise terms)
+    assert!(code_w == 0.0 || code_len == 1 || (mu2 == 0.0 && lamc == 0.0), "code_w_permille without code_len needs mu2 = lamc = 0");
+    let cl0 = CodeLen { on: code_len == 1, w: code_w, beta: code_beta, wu: if code_len == 1 { 0.0 } else { code_w }, ..Default::default() };
+    let cl_on = cl0.on;
+    let full = r.corpus(true);
     let dev = r.corpus(true);
     let classes = r.u32() != 0;
     let mut allow: [std::collections::HashSet<Vec<u32>, Fast>; 3] = Default::default();
     for k in 1..3 {
-        allow[k] = r.table().into_iter().collect();
+        // (case_affixes: affix rows are folded strings, and so are their allowed parts)
+        allow[k] = r.table().into_iter().map(|s| if ca { s.iter().map(|&c| sym.fold[c as usize]).collect() } else { s }).collect();
     }
     let init: Option<[Vec<Vec<u32>>; 3]> = if r.u32() != 0 { Some([r.table(), r.table(), r.table()]) } else { None };
     let script: Vec<u8> = if r.pos < r.buf.len() && r.u32() != 0 { r.u32s(n_sym).into_iter().map(|g| g as u8).collect() } else { Vec::new() };
     drop(r);
     eprintln!("  input read in {:.1}s", tr0.elapsed().as_secs_f64());
     let t0 = Instant::now();
-    let chars: f64 = train.segs.iter().zip(&train.freqs).map(|(s, f)| s.len() as f64 * f).sum();
-    let dev_chars: f64 = dev.segs.iter().zip(&dev.freqs).map(|(s, f)| s.len() as f64 * f).sum();
+    let chars_of = |c: &Corpus| -> f64 { c.segs.iter().zip(&c.freqs).map(|(s, f)| s.len() as f64 * f).sum() };
+    let dev_chars = chars_of(&dev);
 
-    // raw text for the substring index (segments separated by NONE; repeated segments once)
+    // raw text for the substring index (segments separated by NONE; repeated segments once);
+    // always the full corpus, so proposals and raw-text statistics are exact in every phase
     let mut x: Vec<u32> = Vec::new();
     let mut wt: Vec<u32> = Vec::new();
-    for (s, &f) in train.segs.iter().zip(&train.freqs) {
+    for (s, &f) in full.segs.iter().zip(&full.freqs) {
         x.extend(s);
         x.push(NONE);
         wt.extend(std::iter::repeat(f as u32).take(s.len() + 1));
     }
+    // coarse phase corpus (sample_t): see sample_corpus
+    let sampled = (sample_t > 1.0).then(|| sample_corpus(&full, sample_t));
+    let mut train: &Corpus = sampled.as_ref().unwrap_or(&full);
+    let mut chars = chars_of(train);
+    if let Some(s) = &sampled {
+        eprintln!("  coarse phase on a sample (t {sample_t}): {} of {} unique segments, {:.1}% of their chars; then up to {fine_rounds} rounds on the full corpus",
+                  s.segs.len(), full.segs.len(),
+                  100.0 * s.segs.iter().map(|x| x.len()).sum::<usize>() as f64 / full.segs.iter().map(|x| x.len()).sum::<usize>().max(1) as f64);
+    }
     let mut char_n = vec![1.0f64; n_sym];
-    for (s, f) in train.segs.iter().zip(&train.freqs) {
+    for (s, f) in full.segs.iter().zip(&full.freqs) {
         for &c in s {
             if !is_byte(c) {
                 char_n[c as usize] += f;
@@ -3227,10 +6055,17 @@ fn train(args: &[String]) {
     eprintln!("  mining substrings (min count {min_freq}, max length {max_len})");
     let subs = mine(&x, &wt, min_freq, max_len, threads);
     eprintln!("  {} frequent substrings in {:.0}s", subs.len(), t0.elapsed().as_secs_f64());
+    let excl = exclusive_counts(&sym, &x, &subs, threads);
     let frag = if nu > 0.0 || price_pi > 0.0 || pi_core > 0.0 { fragment_scores(&sym, &x, &wt, &subs, frag_t, glue_h0, min_freq) } else { Default::default() };
+    let canon = if case { canonical_masks(&sym, &x, &wt, &subs, ca) } else { HashMap::default() };
+    if case {
+        eprintln!("  case_cores: {} folded strings have a capitalised canonical spelling{}", canon.len(),
+                  if ca { " (case_affixes: affixes too, whole-token variations)" } else { "" });
+    }
     let mut pricing = Pricing {
         pi: price_pi, pi_core, k: prod_k, conc, char_bits: char_bits.clone(), dstems: Default::default(), rare, n0: partner_n0,
         script: Vec::new(), script_chars: Vec::new(), rawcnt: HashMap::default(), min_freq: min_freq as f64,
+        sig_k, sig_share, sig_soft, swap_self, swap_share: if swap_share > 0.0 { swap_share } else { 0.5 },
     };
     if rare > 0.0 {
         // raw counts of every char and frequent substring, and chars per script group
@@ -3270,27 +6105,34 @@ fn train(args: &[String]) {
     // initial dictionary: the alphabet as cores (folded), empty affixes
     let mut tabs = [Table::new(false), Table::new(true), Table::new(true)];
     for i in 0..n_sym as u32 {
-        if sym.fold[i as usize] == i {
+        // (mark_rule: not a combining mark, which no core may start with: such a row could never be
+        // used, and single chars are protected from pruning, so it held its slot to the end)
+        if sym.fold[i as usize] == i && !sym.mark_at(i) {
             tabs[0].add(&[i]);
         }
     }
     if let Some(init) = &init {
         for k in 0..3 {
             for row in &init[k] {
-                tabs[k].add(row);
+                // cores are keyed folded (a case_cores model's table holds canonical spellings), and
+                // affixes too with case_affixes
+                let f: Vec<u32> = if k == 0 || ca { row.iter().map(|&c| sym.fold[c as usize]).collect() } else { row.clone() };
+                tabs[k].add(&f);
             }
         }
         eprintln!("  starting from {} cores, {} prefixes, {} suffixes", tabs[0].live(), tabs[1].live(), tabs[2].live());
     }
     let empty = Trie::empty;
     let mut inc = Dict {
-        sym: &sym, tabs, vcost: [0.0; 4], delta, lam, mu, h0, alnum_only, classes, allow: allow.clone(), mu2, tau,
+        sym: &sym, tabs, vcost: [0.0; NVAR_MAX], case, ca, canon: &canon, delta, lam, mu, h0, alnum_only, classes, allow: allow.clone(), mu2, tau,
         lamc, cn: Default::default(), ncore: Vec::new(),
         pmi: [HashMap::default(), HashMap::default()], tries: [empty(), empty(), empty()], nu, frag: &frag, pricing: &pricing,
+        cl: cl0,
     };
     inc.rebuild();
-    let st = parse_corpus(&inc, &train, threads, false);
+    let st = parse_corpus(&inc, &train, threads, cl_on);
     update_costs(&mut inc, &st);
+    update_codelen(&mut inc, &st);
     let st = parse_corpus(&inc, &train, threads, true);
     let mut inc_score = (st.cost + inc.total_price(), description_length(&inc, &st, &char_bits, gamma));
     eprintln!("  start: rows {} chars/token {:.3}", inc.rows(), chars / st.tokens);
@@ -3306,12 +6148,17 @@ fn train(args: &[String]) {
     // so the expansion budget goes to new candidates instead of re-trying the same rejects
     let mut tabu: std::collections::HashSet<RowKey, Fast> = Default::default();
     let trace = load_trace();
-    for round in 0..max_rounds {
+    // coarse phase (on the sample): until max_rounds or a stop; then fine_rounds on the full corpus
+    let mut coarse = sampled.is_some();
+    let mut fine_left = fine_rounds;
+    for round in 0..max_rounds + if coarse { fine_rounds } else { 0 } {
         let tr = Instant::now();
         let tp = Instant::now();
-        let mut props = propose(&inc, &x, &subs, max_packages, threads);
+        let failed: std::collections::HashSet<Vec<u32>, Fast> =
+            tabu.iter().map(|(t, s)| std::iter::once(*t as u32).chain(s.iter().copied()).collect()).collect();
+        let mut props = propose(&inc, &x, &subs, &excl, round > 0, max_packages, threads, &failed);
         let t_prop = tp.elapsed().as_secs_f64();
-        if refactor && (lam > 0.0 || nu > 0.0) {
+        if refactor && (lam > 0.0 || nu > 0.0 || code_w > 0.0) {
             let tq = Instant::now();
             let mut extra = refactor_proposals(&inc, &inc_st, threads);
             prof("refactor_props", tq);
@@ -3336,16 +6183,17 @@ fn train(args: &[String]) {
         let swaps = swap_proposals(&inc, &inc_st, threads);
         for (i, s) in trace.iter().enumerate() {
             let f = fold_str(&inc, s);
-            if swaps.binary_search(&f).is_ok() {
+            if swaps.contains(&f) {
                 eprintln!("    trace[{i}] swap proposed{}", if tabu.contains(&(0u8, f.clone())) { " (but tabu)" } else { "" });
             }
         }
         prof("swap_props", tq);
         let tq = Instant::now();
         let mut work = Dict {
-            sym: &sym, tabs: inc.tabs.clone(), vcost: inc.vcost, delta, lam, mu, h0, alnum_only, classes, allow: allow.clone(), mu2, tau,
+            sym: &sym, tabs: inc.tabs.clone(), vcost: inc.vcost, case, ca, canon: &canon, delta, lam, mu, h0, alnum_only, classes, allow: allow.clone(), mu2, tau,
             lamc, cn: inc.cn.clone(), ncore: inc.ncore.clone(),
             pmi: inc.pmi.clone(), tries: [empty(), empty(), empty()], nu, frag: &frag, pricing: &pricing,
+            cl: inc.cl.clone(),
         };
         prof("clone_dict", tq);
         let tq = Instant::now();
@@ -3355,6 +6203,13 @@ fn train(args: &[String]) {
         // proposals best first (value, then key: a total order). Every proposal is a row the incumbent
         // lacks, so the adding below stops after `need` of them (after the re-scored shortlist when
         // re-ranking): only that many have to be found and sorted, not the millions proposed.
+        for (i, t) in trace.iter().enumerate() {
+            let f = fold_str(&inc, t);
+            let rank = props.iter().filter(|p| p.1 .0 == 0 && p.1 .1 == f).map(|p| p.0).next();
+            let better = rank.map(|v| props.iter().filter(|p| p.0 > v).count());
+            eprintln!("    trace[{i}] as core: incumbent row {}, proposed {:?} (rank {:?} of {}), tabu {}, need {}",
+                      inc.tabs[0].has(&f), rank, better, props.len(), tabu.contains(&(0u8, f.clone())), target.saturating_sub(inc.rows()));
+        }
         if !tabu.is_empty() {
             let keep = par_map(props.len(), threads, 4096, || (), |_, i| !tabu.contains(&props[i].1));
             let mut i = 0;
@@ -3382,6 +6237,13 @@ fn train(args: &[String]) {
             let mut idx: Vec<usize> = (0..m).collect();
             idx.sort_by(|&a, &b| gains[b].partial_cmp(&gains[a]).unwrap().then(a.cmp(&b)));
             let zero = gains.iter().filter(|&&g| g <= 1e-9).count();
+            for (i, t) in trace.iter().enumerate() {
+                let f = fold_str(&inc, t);
+                if let Some(j) = short.iter().position(|k| k.0 == 0 && k.1 == f) {
+                    let pos = idx.iter().position(|&q| q == j).unwrap();
+                    eprintln!("    trace[{i}] re-scored: exact gain {:.1}, position {pos} of {m} after re-rank (need {need})", gains[j]);
+                }
+            }
             eprintln!("    re-scored {m} proposals exactly: {zero} save nothing ({:.0}s)", te.elapsed().as_secs_f64());
             let tail: Vec<&RowKey> = order[m..].to_vec();
             order = idx.iter().map(|&i| order[i]).chain(tail).collect();
@@ -3391,8 +6253,15 @@ fn train(args: &[String]) {
         let mut added = [0usize; 3];
         let mut added_keys: Vec<RowKey> = Vec::new();
         let mut rows = work.rows(); // kept up to date: counting live rows per add is quadratic
+        // swap proposals first (best first), but at most a quarter of the slots: uncapped, a flood of
+        // self-paying merges filled the whole target, so no re-scored proposal (a word saving
+        // thousands of tokens, बिल्कुल) got in that round
+        let cap = (target.saturating_sub(rows) / 4).max(1000);
         let mut n_swaps = 0;
         for f in swaps {
+            if n_swaps >= cap {
+                break;
+            }
             let key: RowKey = (0, f);
             if !tabu.contains(&key) && work.tabs[0].add(&key.1) {
                 added[0] += 1;
@@ -3429,32 +6298,48 @@ fn train(args: &[String]) {
             }
         }
         prof("add_rows", tq);
+        for (i, t) in trace.iter().enumerate() {
+            let f = fold_str(&inc, t);
+            if added_keys.iter().any(|k| k.0 == 0 && k.1 == f) {
+                eprintln!("    trace[{i}] added as core this round");
+            }
+        }
         let tq = Instant::now();
         work.rebuild();
         prof("rebuild", tq);
         let tw = Instant::now();
         for _ in 0..em_iters {
-            let st = parse_corpus(&work, &train, threads, mu > 0.0 || mu2 > 0.0 || lamc > 0.0);
+            let st = parse_corpus(&work, &train, threads, mu > 0.0 || mu2 > 0.0 || lamc > 0.0 || cl_on);
             update_costs(&mut work, &st);
             update_spec(&mut work, &st);
             update_pmi(&mut work, &st);
             update_cond(&mut work, &st);
+            update_codelen(&mut work, &st);
         }
         let t_em = tw.elapsed().as_secs_f64();
         let tw = Instant::now();
-        prune_to(&mut work, &train, budget, threads, protect_chars, step);
+        let em_done = prune_to(&mut work, &train, budget, threads, protect_chars, step, prune_reuse, prune_tail);
         let t_prune = tw.elapsed().as_secs_f64();
+        for (i, t) in trace.iter().enumerate() {
+            let f = fold_str(&inc, t);
+            if let Some(&r) = work.tabs[0].map.get(&f) {
+                eprintln!("    trace[{i}] after prune: core {} price {:.1}", if work.tabs[0].alive[r as usize] { "live" } else { "dead" }, work.tabs[0].price[r as usize]);
+            }
+        }
         let tw = Instant::now();
         let tq = Instant::now();
         tabu = added_keys.into_iter().filter(|(t, s)| !work.tabs[*t as usize].has(s)).collect();
         prof("tabu", tq);
         let tq = Instant::now();
-        for _ in 0..em_iters {
-            let st = parse_corpus(&work, &train, threads, mu > 0.0 || mu2 > 0.0 || lamc > 0.0);
+        // (prune_reuse: the first step would re-estimate from the prune loop's last parse, re-used as
+        // is since no row was dropped after it, i.e. repeat that pass's re-estimation: skipped)
+        for _ in usize::from(em_done)..em_iters {
+            let st = parse_corpus(&work, &train, threads, mu > 0.0 || mu2 > 0.0 || lamc > 0.0 || cl_on);
             update_costs(&mut work, &st);
             update_spec(&mut work, &st);
             update_pmi(&mut work, &st);
             update_cond(&mut work, &st);
+            update_codelen(&mut work, &st);
         }
         prof("em2", tq);
         let tq = Instant::now();
@@ -3477,6 +6362,7 @@ fn train(args: &[String]) {
                   if accept { "accepted" } else { "rejected" }, tr.elapsed().as_secs_f64());
         let tq = Instant::now();
         let prev_best = best_dev;
+        let mut stop = false;
         if accept {
             inc = work;
             inc_st = st;
@@ -3489,21 +6375,61 @@ fn train(args: &[String]) {
         } else {
             fails += 1;
             k_extra *= 2; // explore a larger expansion next time
-            if fails >= 2 {
-                prof("accept_save", tq);
-                eprintln!("    prof: {}", prof_dump());
-                break;
-            }
+            stop = fails >= 2;
         }
         prof("accept_save", tq);
         eprintln!("    prof: {}", prof_dump());
-        // early stop (min_gain_ppm): the round improved the best dev chars/token too little
-        if min_gain > 0.0 && round > 0 && prev_best.is_finite() {
+        // early stop (min_gain_ppm): the round improved the best dev chars/token too little (in the
+        // fine phase only accepted rounds count: a rejection there is retried with a larger expansion)
+        let fine = sampled.is_some() && !coarse;
+        let min_gain_now = if coarse && coarse_gain > 0.0 { coarse_gain } else { min_gain };
+        if !stop && min_gain_now > 0.0 && round > 0 && prev_best.is_finite() && (accept || !fine) {
             let gain = (prev_best / best_dev - 1.0) * 1e6;
-            if gain < min_gain {
-                eprintln!("  stopping: best dev chars/token improved by {gain:.0} ppm < {min_gain} ppm this round");
+            if gain < min_gain_now {
+                eprintln!("  stopping{}: best dev chars/token improved by {gain:.0} ppm < {min_gain_now} ppm this round",
+                          if coarse { " the coarse phase" } else { "" });
+                stop = true;
+            }
+        }
+        if !coarse && sampled.is_some() {
+            fine_left = fine_left.saturating_sub(1);
+            stop |= fine_left == 0;
+        }
+        if coarse && (stop || round + 1 >= max_rounds) {
+            // switch to the full corpus: the incumbent re-estimated and re-scored there (its sample
+            // score is not comparable), then refined by the fine rounds
+            coarse = false;
+            if fine_rounds == 0 {
                 break;
             }
+            let tq = Instant::now();
+            train = &full;
+            chars = chars_of(train);
+            let st = parse_corpus(&inc, train, threads, true);
+            update_costs(&mut inc, &st);
+            update_spec(&mut inc, &st);
+            update_pmi(&mut inc, &st);
+            update_cond(&mut inc, &st);
+            update_codelen(&mut inc, &st);
+            // (partner and signature prices; the signature factor too: without it the incumbent was scored with its affixes'
+            // bare partner prices, cheaper than the fine round's fully priced rows, so the fine round
+            // was rejected even when it improved dev chars/token)
+            update_prices(&mut inc, &st);
+            let st = parse_corpus(&inc, train, threads, true);
+            inc_score = (st.cost + inc.total_price(), description_length(&inc, &st, &char_bits, gamma));
+            inc_st = st;
+            fails = 0;
+            // a coarse phase run to convergence stopped at this expansion (a first fine round there
+            // was mostly rejected in tests): refine with a larger one, as after a rejection
+            if coarse_gain == 0.0 {
+                k_extra *= 2;
+            }
+            eprintln!("  fine phase: full corpus, incumbent chars/token train {:.3}, R {:.4e} bits (parse {:.4e} + prices {:.4e}) ({:.0}s)", chars / inc_st.tokens, inc_score.0, inc_st.cost, inc.total_price(), tq.elapsed().as_secs_f64());
+            prof_dump();
+            continue;
+        }
+        if stop {
+            break;
         }
     }
     if best_dev == f64::INFINITY {
@@ -3514,11 +6440,39 @@ fn train(args: &[String]) {
 
 fn encode(args: &[String]) {
     let mut m = Reader::open(&args[2]);
-    let n_sym = m.u32() as usize;
+    let mut n_sym = m.u32() as usize;
+    let ca = n_sym == CAFX_MAGIC as usize;
+    let case = ca || n_sym == CASE_MAGIC as usize;
+    if case {
+        n_sym = m.u32() as usize;
+    }
     let mut sym = m.symbols(n_sym);
-    let strs = [m.table(), m.table(), m.table()];
+    let mut strs = [m.table(), m.table(), m.table()];
     let costs: Vec<Vec<f64>> = (0..3).map(|k| (0..strs[k].len()).map(|_| m.f64()).collect()).collect();
-    let vcost = [m.f64(), m.f64(), m.f64(), m.f64()];
+    let mut vcost = [0.0; NVAR_MAX];
+    for v in vcost.iter_mut().take(if ca { NVAR_MAX } else if case { NVAR_CASE } else { 4 }) {
+        *v = m.f64();
+    }
+    // case_cores: cores are stored as canonical spellings; the trie is keyed by the folded form and
+    // the canonical upper masks are looked up by it (Dict::canon_mask)
+    // (case_affixes: the affix tables too; their masks are also set directly on the rows below,
+    // so that encoding always writes exactly the stored spellings)
+    let mut canon: HashMap<u64, u64, Fast> = HashMap::default();
+    let mut masks: [Vec<u64>; 3] = Default::default();
+    if case {
+        for k in 0..if ca { 3 } else { 1 } {
+            for s in strs[k].iter_mut() {
+                let um = s.iter().take(64).enumerate().fold(0u64, |a, (k, &c)| a | (((sym.cf[c as usize] & CF_UP != 0) as u64) << k));
+                for c in s.iter_mut() {
+                    *c = sym.fold[*c as usize];
+                }
+                if um != 0 {
+                    canon.insert(seq_hash(s.iter().copied()), um);
+                }
+                masks[k].push(um);
+            }
+        }
+    }
     let delta = m.f64();
     sym.nbytes = m.u32s(n_sym);
     let lam = m.f64();
@@ -3533,6 +6487,7 @@ fn encode(args: &[String]) {
             tabs[k].spec.push(0.0);
             tabs[k].glue.push(0.0);
             tabs[k].usec.push(0.0);
+            tabs[k].umask.push(0);
             tabs[k].price.push(0.0);
         }
     }
@@ -3582,20 +6537,80 @@ fn encode(args: &[String]) {
             }
         }
     }
+    // trailing sections: mark_rule, then code_len (each optional, tagged)
+    let mut tag = if m.pos + 4 <= m.buf.len() { m.u32() } else { 0 };
+    if tag == MARK_MAGIC {
+        sym.alnum = m.u32s(n_sym);
+        sym.mark_rule = true;
+        tag = if m.pos + 4 <= m.buf.len() { m.u32() } else { 0 };
+    }
+    let mut cl = CodeLen::default();
+    if tag == CODE_MAGIC {
+        cl.on = m.u32() == 1;
+        cl.w = m.f64();
+        cl.byte = m.f64();
+        cl.wu = if cl.on { 0.0 } else { cl.w };
+    }
+    if cl.on {
+        let nc = strs[0].len();
+        let mut q = || (u16::from_le_bytes(m.take::<2>()) as f64 / CL_Q) as f32;
+        cl.bo = (0..nc).map(|_| [q(), q(), q()]).collect();
+        for k in 0..3 {
+            let len = m.u32() as usize;
+            let buf = &m.buf[m.pos..m.pos + len];
+            m.pos += len;
+            let mut at = 0usize;
+            for c in 0..nc as u32 {
+                let cnt = get_var(buf, &mut at);
+                let mut a = 0u32;
+                for j in 0..cnt {
+                    let g = get_var(buf, &mut at);
+                    a = if j == 0 { g } else { a + g + 1 };
+                    let v = (u16::from_le_bytes([buf[at], buf[at + 1]]) as f64 / CL_Q) as f32;
+                    at += 2;
+                    cl.pair[k].insert(if k == 0 { (a, c) } else { (c, a) }, v);
+                }
+            }
+        }
+        let nv = if ca { NVAR_MAX } else if case { NVAR_CASE } else { 4 };
+        cl.vb = codelen_vb(&cl.bo, &cl.pair[2], &vcost, nv);
+        cl.index();
+    }
     let empty = Trie::empty;
     let no_frag: [HashMap<u64, f32, Fast>; 3] = Default::default();
     let no_pricing = Pricing::default();
-    let mut d = Dict { sym: &sym, tabs, vcost, delta, lam, mu, h0: 0.0, alnum_only: false, classes: false, allow: Default::default(), mu2, tau, pmi, lamc, cn, ncore, tries: [empty(), empty(), empty()], nu, frag: &no_frag, pricing: &no_pricing };
+    let mut d = Dict { sym: &sym, tabs, vcost, case, ca, canon: &canon, delta, lam, mu, h0: 0.0, alnum_only: false, classes: false, allow: Default::default(), mu2, tau, pmi, lamc, cn, ncore, tries: [empty(), empty(), empty()], nu, frag: &no_frag, pricing: &no_pricing, cl };
     d.rebuild();
+    if ca {
+        for k in 0..3 {
+            d.tabs[k].umask.clone_from(&masks[k]);
+        }
+    }
     let c = Reader::open(&args[3]).corpus(false);
     let mut w = BufWriter::new(std::fs::File::create(&args[4]).expect("create output"));
-    let mut sc = Scratch::new();
-    let mut toks = Vec::new();
-    for s in &c.segs {
-        d.parse(s, &mut sc, Some(&mut toks), None);
-        put(&mut w, &[toks.len() as u32]);
-        for t in &toks {
-            put(&mut w, &[t.v, t.p, t.c, t.s]);
+    // segments are parsed independently: on several threads (env DS_THREADS, default up to 8),
+    // in chunks whose outputs are written in segment order (the same bytes as one thread)
+    let threads = std::env::var("DS_THREADS").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or_else(|| {
+        std::thread::available_parallelism().map_or(1, |n| n.get()).min(8)
+    }).max(1);
+    const CHUNK: usize = 1 << 16;
+    const BLOCK: usize = 256;
+    let d = &d;
+    for lo in (0..c.segs.len()).step_by(CHUNK) {
+        let hi = (lo + CHUNK).min(c.segs.len());
+        let out: Vec<Vec<u8>> = par_map((hi - lo).div_ceil(BLOCK), threads, 1, || (Scratch::new(), Vec::new()), |(sc, toks), b| {
+            let mut o = Vec::new();
+            for s in &c.segs[lo + b * BLOCK..(lo + (b + 1) * BLOCK).min(hi)] {
+                d.parse(s, sc, Some(toks), None);
+                put(&mut o, &[toks.len() as u32]);
+                for t in toks.iter() {
+                    put(&mut o, &[t.v, t.p, t.c, t.s]);
+                }
+            }
+            o
+        });
+        for o in out {
+            w.write_all(&o).unwrap();
         }
     }
 }

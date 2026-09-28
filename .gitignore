@@ -21,3 +21,10 @@ figures/_preview*
 native/*/target/
 native/*/target_dev/
 # frontier tokenizer files (downloaded by the user, see experiments/bench_frontier.py)
+
+# temp files (cbpe sets tempfile.tempdir here, see cbpe/__init__.py)
+/tmp/
+
+# third-party tokenizer files for comparisons (downloaded), and the bench run log
+results/frontier_tok/
+results/unrestricted.json

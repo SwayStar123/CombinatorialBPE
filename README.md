@@ -160,6 +160,65 @@ code). The gap does not shrink at frontier vocabulary sizes.
 
 ![Equal token count](figures/equal_tokens.svg)
 
+## Unrestricted trainer (experimental)
+
+`native/dict_search` trains the factors **without the regex restrictions**: prefixes, cores and
+suffixes can be any strings, and a from-scratch dictionary search decides what goes where (see
+[docs/unrestricted_trainer_problem.md](docs/unrestricted_trainer_problem.md) and the parameter
+documentation at the top of `native/dict_search/src/main.rs`). Tokens never cross whitespace
+(`--hybrid`: text is cut into `\s*\S+` chunks); nothing else is language-specific.
+
+- **Search.** Candidate rows come from a frequent-substring index (exclusive counts, so the
+  substrings of a frequent word do not all claim its occurrences), are routed to the cut whose
+  weakest row is most in demand, and are re-scored exactly by re-parsing. Rows are pruned by
+  leave-one-out loss against an MDL price (spelling bits × productivity / paradigm multipliers),
+  so a row has to pay for itself.
+- **Case.** Cores keep their most frequent spelling (`iPhone`, `YouTube`); with `case_affixes`
+  affixes do too, and 8 variations (as stored, Capitalised, UPPER, Traditional, lower, camelCase,
+  PascalCase, Title) apply to the whole token, so `unhappy` / `Unhappy` / `UNHAPPY` and
+  `getName` / `filename` share rows.
+- **Scripts.** `mark_rule` keeps combining marks (Devanagari vowel signs, viramas) attached to the
+  character before them.
+- **Exact encoder.** A DP over (prefix, core, suffix) minimising tokens, then bits; lossless with
+  byte fallback.
+
+Recommended flags (see `experiments/bench_dictsearch.py`; data from `scripts/download_curated.py`):
+
+```bash
+CBPE_DATA=curated python experiments/bench_dictsearch.py --hybrid --vocab=131072 --tokdata=320000000 \
+  --set=max_rounds:12 --set=min_freq:50 --set=first_expand_permille:4000 --set=max_packages:2000000 \
+  --set=prune_step_permille:150 --set=lambda_permille:20 --set=rerank_mult:4 --set=rerank_occ:300 \
+  --set=refactor:1 --set=price_permille:100 --set=prod_k:50 --set=partner_n0:1000 --set=sig_k:50 \
+  --set=swap_share_permille:100 --set=case_cores:1 --set=mark_rule:1 --set=sig_soft:1 \
+  --set=min_gain_ppm:50 --set=swap_self_permille:20000 --set=case_affixes:1 \
+  --set=prune_reuse:1 --set=prune_tail_ppm:1000
+```
+
+Results with a 128k tokenizer trained on 320M characters per source (11 sources, curated data:
+FineWeb-Edu, FineWeb-2, github-code-clean), on 4M held-out characters per source:
+
+| | English | German | French | Hindi | Japanese | Chinese | Python | C++ |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| chars / token | 6.00 | 6.64 | 5.99 | 4.89 | 5.30 | 4.10 | 8.93 | 7.73 |
+| words cut by a token boundary | 1.4% | 5.2% | 2.1% | 2.2% | – | – | 5.5% | 9.6% |
+
+- **Hindi:** 4.89 chars/token and 1.03 tokens per word, vs Sarvam-30B 3.74 / 1.35 and GPT-4o
+  3.20 / 1.58; 2.6% of words cut by a token boundary vs 13.2% (Sarvam-30B) and 27.6% (GPT-4o).
+- **Chinese:** 4.10 chars/token vs Kimi K3 1.65 and GPT-4o 1.24.
+- **Morpheme boundaries** (`experiments/morph_eval.py`, gold data used for evaluation only;
+  factor boundaries count):
+  - Hindi MorphScore boundary precision 0.63–0.70, vs Kimi K3 0.25 and GPT-4o 0.39.
+  - Chinese SIGHAN PKU word-boundary precision 0.79, vs Kimi K3 0.90 and GPT-4o 0.73. Our
+    tokens often span two words, and a boundary inside such a token is misplaced in about 1 of 5
+    cases.
+- The worst splits left are mostly real morphology (`year:s`, `उत्पाद:ों`), rare or bursty
+  words, and a few single-token ties; `experiments/worst_cases.py` prints them per source.
+
+Not yet done: a language-model comparison with this tokenizer (the headline above uses the
+restricted 32k one). A Unigram-style code-length objective (`code_len`, `code_w_permille`) is
+implemented but off by default: it did not improve segmentation at 64k (conditioned on the core it
+fragmented common words; unconditioned it was within noise).
+
 ## Limitations and prior art
 
 - **Small scale.** 30–45M-parameter models (93M for the 128k-vocab baseline), at most 369M
@@ -226,6 +285,13 @@ experiments/bench_iso.py         English compression up to 256k vocab (token-cou
 experiments/bench_frontier.py    comparison with production tokenizers (Kimi K3, GPT-4o, GPT-4)
 experiments/report.py            results/REPORT.md and plots
 native/bpe_train/                optional Rust BPE merge loop (identical output to the Python trainer)
+native/dict_search/              unrestricted factored trainer + exact encoder (Rust)
+cbpe/unrestricted.py             loader / encoder / decoder for unrestricted models
+scripts/download_curated.py      curated data: FineWeb-Edu, FineWeb-2, github-code-clean (--more: more text)
+experiments/bench_dictsearch.py  trains an unrestricted tokenizer and reports compression per source
+experiments/worst_cases.py       worst splits, least productive affixes, least used cores
+experiments/morph_eval.py        morpheme / word boundary precision and recall (MorphScore, SIGHAN)
+experiments/train_bpe_big.py     standard BPE on the same multi-GB tokenizer text
 ```
 
 </details>
