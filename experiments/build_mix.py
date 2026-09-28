@@ -43,6 +43,13 @@ SOURCES = {
 LM_FILES_BIG = {"en": "wiki_en_lm700.txt", "javascript": "code_javascript_lm900.txt",
                 **{k: f"wiki_{k}_lm150.txt" for k in ("de", "fr", "ru", "ja", "zh")},
                 **{k: f"code_{k}_lm150.txt" for k in ("python", "java", "cpp", "go")}}
+# CBPE_DATA=curated: the curated data written by scripts/download_curated.py (FineWeb-Edu,
+# FineWeb-2, github-code-clean), with Hindi in place of Russian; same file roles, in data/curated/
+if os.environ.get("CBPE_DATA") == "curated":
+    DATA = os.path.join(ROOT, "data", "curated")
+    SOURCES = {k: (k, f"{k}.lm.txt", 50e6) for k in
+               ("en", "de", "fr", "hi", "ja", "zh", "python", "javascript", "java", "cpp", "go")}
+    LM_FILES_BIG = {k: f"{k}.lm.txt" for k in SOURCES}
 TOKENIZERS = {
     "bpe_gpt2": lambda text: StandardBPE.train(text, VOCAB, "gpt2"),
     "bpe_cl100k": lambda text: StandardBPE.train(text, VOCAB, "cl100k"),

@@ -266,6 +266,9 @@ if __name__ == "__main__":
     lm(lines, "lm_mix", "mixed prose (6 languages) + code (5 languages), 32k budget")
     lm(lines, "lm_mix3x", "mixed prose + code, 3x longer (22,500 steps), 32k budget")
     source_trajectories(lines)
+    lm(lines, "lm_sweep", "learning-rate sweep, modern recipe (RoPE, SwiGLU, QK-norm, Muon), 3,000 steps")
+    lm(lines, "lm_mix3x_modern", "mixed prose + code, modern recipe, 22,500 steps, 32k budget")
+    source_trajectories(lines, "lm_mix3x_modern")
     with open(os.path.join(RES, "REPORT.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print("\n".join(lines))

@@ -1,0 +1,12 @@
+[package]
+name = "bpe_train"
+version = "0.1.0"
+edition = "2021"
+description = "Fast BPE merge loop for cbpe.CharBPE.train (same algorithm and tie-breaking as the Python trainer)"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

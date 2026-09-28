@@ -84,8 +84,10 @@ F_UP, F_TRAD = 1, 2  # per-character fold flags
 
 # Chinese script variation (optional): cores are stored in Simplified; a Traditional char is
 # folded only when converting its Simplified form back gives exactly that char (OpenCC tables,
-# built by scripts/build_han_tables.py), so the fold is exactly invertible.
-with open(os.path.join(os.path.dirname(__file__), "data", "han_st.json"), encoding="utf-8") as _f:
+# built by scripts/build_han_tables.py), so the fold is exactly invertible. CBPE_HAN_TABLE picks
+# another table, e.g. han_st_data.json (the Traditional form most used in the training data).
+_HAN_TABLE = os.environ.get("CBPE_HAN_TABLE", "han_st.json")
+with open(os.path.join(os.path.dirname(__file__), "data", _HAN_TABLE), encoding="utf-8") as _f:
     _han = json.load(_f)
 HAN_TO_TRAD: dict[str, str] = _han["to_trad"]
 HAN_FOLD: dict[str, str] = _han["fold"]
@@ -174,8 +176,14 @@ def n_variations(fold_case: bool, fold_han: bool) -> int:
 
 class CombinatorialBPE:
     def __init__(self, core: CharBPE, prefixes: list[str], suffixes: list[str], fold_case: bool = True,
-                 punct_to_next: bool = False, fold_han: bool = False, split_camel: bool = False):
+                 punct_to_next: bool = False, fold_han: bool = False, split_camel: bool = False,
+                 letter_prefixes=(), letter_suffixes=()):
+        """letter_prefixes / letter_suffixes: optional closed-class morphemes (e.g. re-, un-, -s, -ing,
+        mined by experiments/mine_affixes.py) that may be split off a word into its prefix / suffix,
+        joined with the surrounding punctuation affix, when the rest of the word is a single core."""
         assert prefixes[0] == "" and suffixes[0] == ""
+        self.letter_prefixes = sorted(letter_prefixes, key=len, reverse=True)
+        self.letter_suffixes = sorted(letter_suffixes, key=len, reverse=True)
         self.core = core
         self.fold_case = fold_case
         self.fold_han = fold_han
@@ -242,12 +250,46 @@ class CombinatorialBPE:
                         out.append(({F_UP: V_CAP, F_TRAD: V_TRAD}.get(fl, V_NONE), ci))
         return out
 
+    @staticmethod
+    def split_letter_affixes(pre, word, suf, lps, lss, is_core):
+        """All ways to move a letter prefix / suffix from `word` into the unit's prefix / suffix,
+        longest affixes first, keeping only those whose remaining stem satisfies is_core."""
+        out = []
+        for ap in list(lps) + [""]:
+            if ap and not word.startswith(ap):
+                continue
+            for as_ in list(lss) + [""]:
+                if not (ap or as_) or (as_ and not word.endswith(as_)):
+                    continue
+                stem = word[len(ap):len(word) - len(as_)]
+                if len(stem) >= 2 and is_core(stem):
+                    out.append((pre + ap, stem, as_ + suf, len(ap), len(as_)))
+        return out
+
+    def _decompose(self, pre, word, suf):
+        """(pre, stem, suf) with a letter affix moved out of the word, if the word is not a single
+        core, the stem is, and the combined affixes exist; else None."""
+        if not (self.letter_prefixes or self.letter_suffixes) or len(self._encode_word(word)) == 1:
+            return None
+        one_core = lambda st: len(self._encode_word(st)) == 1  # noqa: E731
+        for pre2, stem, suf2, lp, ls in self.split_letter_affixes(pre, word, suf, self.letter_prefixes,
+                                                                     self.letter_suffixes, one_core):
+            p, _ = longest_suffix_in(pre2, self.p2id, self.max_p)
+            s, _ = longest_prefix_in(suf2, self.s2id, self.max_s)
+            if (not lp or (p and len(self.prefixes[p]) >= lp)) and (not ls or (s and len(self.suffixes[s]) >= ls)):
+                return pre2, stem, suf2
+        return None
+
     def encode_unit(self, pre: str, word: str, suf: str) -> list[tuple[int, int, int, int]]:
         key = (pre, word, suf)
         cached = self._cache.get(key)
         if cached is not None:
             return cached
         toks = []
+        if word:
+            dec = self._decompose(pre, word, suf)
+            if dec is not None:
+                pre, word, suf = dec
         if not word:  # junk run with no letters/digits (e.g. end of text)
             toks = [(V_NONE, 0, c, 0) for c in self.core.encode(pre)]
         else:
@@ -307,11 +349,29 @@ class CombinatorialBPE:
     def train(text: str, vocab_size: int, min_char_freq=20, max_affix_candidates=2000,
               min_affix_freq=10, max_affix_len=16, n_prefix=None, n_suffix=None,
               fold_case=True, punct_to_next=False, fold_han=False, split_camel=False,
+              letter_prefixes=(), letter_suffixes=(), reference=None,
               verbose=False) -> "CombinatorialBPE":
         """If n_prefix / n_suffix are None the affix/core budget split is learned.
-        fold_case=False / n_prefix=n_suffix=0 give the ablations (affixes only / case only)."""
+        fold_case=False / n_prefix=n_suffix=0 give the ablations (affixes only / case only).
+        letter_prefixes / letter_suffixes (with `reference`, a trained CombinatorialBPE): words that are
+        not a single core of `reference` but split into letter affix + a stem that is, are counted as
+        that stem, with the letter affix joined to the unit's prefix / suffix."""
         word_counts, pre_counts, suf_counts, junk_counts = Counter(), Counter(), Counter(), Counter()
+        lps = sorted(letter_prefixes, key=len, reverse=True)
+        lss = sorted(letter_suffixes, key=len, reverse=True)
+        if lps or lss:
+            fold = lambda w: "".join(fold_char(ch, fold_case, fold_han)[0] for ch in w)  # noqa: E731
+            ref_cores = {v for v in reference.core.vocab if isinstance(v, str)}
+            is_core = lambda st: fold(st) in ref_cores  # noqa: E731
+            dec_cache = {}
         for pre, word, suf in unit_parts(text, punct_to_next):
+            if word and (lps or lss) and not is_core(word):
+                key = (pre, word, suf)
+                if key not in dec_cache:
+                    opts = CombinatorialBPE.split_letter_affixes(pre, word, suf, lps, lss, is_core)
+                    dec_cache[key] = opts[0][:3] if opts else None
+                if dec_cache[key] is not None:
+                    pre, word, suf = dec_cache[key]
             if word:
                 if split_camel:
                     word_counts.update(CAMEL_SPLIT.split(word))
@@ -358,14 +418,16 @@ class CombinatorialBPE:
                                                fold_case, fold_han)
         core_size = vocab_size - n_var - len(prefixes) - len(suffixes)
         core = CharBPE.train(corpus, core_size, min_char_freq, verbose)
-        return CombinatorialBPE(core, prefixes, suffixes, fold_case, punct_to_next, fold_han, split_camel)
+        return CombinatorialBPE(core, prefixes, suffixes, fold_case, punct_to_next, fold_han, split_camel,
+                                lps, lss)
 
     # ------------------------------------------------------------------- io
     def save(self, path):
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"type": "combinatorial", "prefixes": self.prefixes, "suffixes": self.suffixes,
                        "fold_case": self.fold_case, "punct_to_next": self.punct_to_next, "fold_han": self.fold_han,
-                       "split_camel": self.split_camel,
+                       "split_camel": self.split_camel, "letter_prefixes": self.letter_prefixes,
+                       "letter_suffixes": self.letter_suffixes,
                        **self.core.to_dict()}, f, ensure_ascii=False)
 
 
@@ -374,5 +436,10 @@ def load(path):
         d = json.load(f)
     if d["type"] == "standard":
         return StandardBPE(CharBPE.from_dict(d), d["pattern"])
+    if d["type"] == "unrestricted":
+        from .unrestricted import UnrestrictedBPE
+        return UnrestrictedBPE(os.path.join(os.path.dirname(os.path.abspath(path)), d["model"]), d["alphabet"],
+                               d.get("segmentation", "chunks"))
     return CombinatorialBPE(CharBPE.from_dict(d), d["prefixes"], d["suffixes"], d.get("fold_case", True),
-                            d.get("punct_to_next", False), d.get("fold_han", False), d.get("split_camel", False))
+                            d.get("punct_to_next", False), d.get("fold_han", False), d.get("split_camel", False),
+                            d.get("letter_prefixes", ()), d.get("letter_suffixes", ()))

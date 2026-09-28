@@ -140,3 +140,15 @@ def test_code_roundtrip(split_camel):
     assert stats["chars"] == len("getUserName" + "parseJSONResponse" + "XMLHttpRequest")
     if split_camel:  # every camel part has a clean case pattern -> no per-character fallback
         assert stats["fallback_chars"] == 0
+
+
+@pytest.mark.skipif(__import__("cbpe.bpe", fromlist=["x"]).native_trainer() is None,
+                    reason="native trainer not built (cargo build --release in native/bpe_train)")
+def test_native_trainer_matches_python(monkeypatch):
+    results = []
+    for flag in ("0", "1"):
+        monkeypatch.setenv("CBPE_NATIVE", flag)
+        std = StandardBPE.train(TRAIN + CODE * 20, 500, min_char_freq=5)
+        comb = CombinatorialBPE.train(TRAIN + CODE * 20, 500, min_char_freq=5, min_affix_freq=5, split_camel=True)
+        results.append((std.bpe.merges, std.bpe.merge_counts, comb.core.merges, comb.prefixes, comb.suffixes))
+    assert results[0] == results[1]

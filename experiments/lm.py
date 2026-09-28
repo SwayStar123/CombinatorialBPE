@@ -72,19 +72,66 @@ class Block(nn.Module):
         return x + self.mlp(self.ln2(x))
 
 
+def rope_tables(T, head_dim, base=10000.0):
+    """cos/sin tables shaped (T, 1, head_dim/2) to broadcast over (B, T, H, head_dim/2)."""
+    inv = 1.0 / base ** (torch.arange(0, head_dim, 2).float() / head_dim)
+    ang = torch.outer(torch.arange(T).float(), inv)[:, None, :]
+    return ang.cos(), ang.sin()
+
+
+def apply_rope(x, cos, sin):
+    x1, x2 = x.chunk(2, dim=-1)
+    return torch.cat([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1)
+
+
+class ModernBlock(nn.Module):
+    """Pre-norm block with RMSNorm, QK-norm, rotary positions and a SwiGLU MLP (same parameter count)."""
+
+    def __init__(self, d, h):
+        super().__init__()
+        self.h, hd = h, d // h
+        self.ln1, self.ln2 = nn.RMSNorm(d), nn.RMSNorm(d)
+        self.q_norm, self.k_norm = nn.RMSNorm(hd), nn.RMSNorm(hd)
+        self.qkv, self.o = nn.Linear(d, 3 * d, bias=False), nn.Linear(d, d, bias=False)
+        hid = 32 * round(8 * d / 3 / 32)  # 3 * d * hid ~= 8 * d^2, like the 4x GELU MLP
+        self.gate_up = nn.Linear(d, 2 * hid, bias=False)
+        self.down = nn.Linear(hid, d, bias=False)
+
+    def forward(self, x, rope):
+        B, T, D = x.shape
+        # norms and rotary on the contiguous (B, T, H, hd) layout, then transpose for attention
+        q, k, v = self.qkv(self.ln1(x)).view(B, T, 3, self.h, D // self.h).unbind(2)
+        q = apply_rope(self.q_norm(q), *rope).to(v.dtype).transpose(1, 2)
+        k = apply_rope(self.k_norm(k), *rope).to(v.dtype).transpose(1, 2)
+        a = F.scaled_dot_product_attention(q, k, v.transpose(1, 2), is_causal=True)
+        x = x + self.o(a.transpose(1, 2).reshape(B, T, D))
+        g, u = self.gate_up(self.ln2(x)).chunk(2, dim=-1)
+        return x + self.down(F.silu(g) * u)
+
+
 class GPT(nn.Module):
-    """sizes: list of table sizes; 1 table = standard LM, 4 tables = combinatorial."""
+    """sizes: list of table sizes; 1 table = standard LM, 4 tables = combinatorial.
+    arch="gpt2": learned positions, LayerNorm, GELU MLP.  arch="modern": RoPE, RMSNorm, QK-norm, SwiGLU."""
 
     def __init__(self, sizes, d=512, n_layer=8, n_head=8, ctx=512, head="linear", head_hidden=1,
-                 order=(2, 1, 0, 3)):
+                 order=(2, 1, 0, 3), arch="gpt2"):
         super().__init__()
         self.sizes = sizes
+        self.arch = arch
+        self.head_dim = d // n_head
         self.head = head
         self.order = tuple(order)  # chain head: factor prediction order (indices into var, pre, core, suf)
         self.emb = nn.ModuleList(nn.Embedding(n, d) for n in sizes)
-        self.pos = nn.Embedding(ctx, d)
-        self.blocks = nn.ModuleList(Block(d, n_head) for _ in range(n_layer))
-        self.ln_f = nn.LayerNorm(d)
+        if arch == "modern":
+            self.blocks = nn.ModuleList(ModernBlock(d, n_head) for _ in range(n_layer))
+            self.ln_f = nn.RMSNorm(d)
+            cos, sin = rope_tables(ctx, d // n_head)
+            self.register_buffer("rope_cos", cos.bfloat16(), persistent=False)
+            self.register_buffer("rope_sin", sin.bfloat16(), persistent=False)
+        else:
+            self.pos = nn.Embedding(ctx, d)
+            self.blocks = nn.ModuleList(Block(d, n_head) for _ in range(n_layer))
+            self.ln_f = nn.LayerNorm(d)
         if len(sizes) == 4:  # factor order in tuples: (var, pre, core, suf)
             if head == "linear":
                 self.cond = nn.Linear(d, d, bias=False)
@@ -98,7 +145,7 @@ class GPT(nn.Module):
                 self.ln_steps = nn.ModuleList(nn.LayerNorm(d) for _ in range(n))
         self.apply(self._init)
         for n, p in self.named_parameters():
-            if n.endswith("o.weight") or n.endswith("mlp.2.weight"):
+            if n.endswith("o.weight") or n.endswith("mlp.2.weight") or n.endswith("down.weight"):
                 nn.init.normal_(p, std=0.02 / math.sqrt(2 * n_layer))
 
     @staticmethod
@@ -109,11 +156,17 @@ class GPT(nn.Module):
     def forward(self, x, y):
         """x, y: [B, T, F] int. Returns summed NLL (nats) over all target tokens, and per-factor sums."""
         B, T, _ = x.shape
-        h = self.pos(torch.arange(T, device=x.device))
+        h = 0
         for i, e in enumerate(self.emb):
             h = h + e(x[..., i])
-        for blk in self.blocks:
-            h = blk(h)
+        if self.arch == "modern":
+            rope = (self.rope_cos[:T], self.rope_sin[:T])
+            for blk in self.blocks:
+                h = blk(h, rope)
+        else:
+            h = h + self.pos(torch.arange(T, device=x.device))
+            for blk in self.blocks:
+                h = blk(h)
         h = self.ln_f(h)
         if len(self.sizes) == 1:
             nll = F.cross_entropy((h @ self.emb[0].weight.T).float().flatten(0, 1), y[..., 0].flatten(),
@@ -149,6 +202,51 @@ class GPT(nn.Module):
         return sum(parts), [p.detach() for p in parts]
 
 
+# ---------------------------------------------------------------- optimizer
+@torch.no_grad()
+def newton_schulz(G, steps=5, eps=1e-7, coeffs=(3.4445, -4.775, 2.0315)):
+    """Batched quintic Newton-Schulz orthogonalisation of G (n, m, k) in bf16, as in Muon."""
+    a, b, c = coeffs
+    X = G.bfloat16()
+    tall = X.size(-2) > X.size(-1)
+    if tall:
+        X = X.mT
+    X = X / (X.norm(dim=(-2, -1), keepdim=True) + eps)
+    for _ in range(steps):
+        A = X @ X.mT
+        X = a * X + (b * A + c * A @ A) @ X
+    return X.mT if tall else X
+
+
+class BatchedMuon(torch.optim.Optimizer):
+    """Muon (same maths as torch.optim.Muon with adjust_lr_fn="match_rms_adamw") that stacks every
+    group of same-shaped matrices and orthogonalises them in one batched call."""
+
+    def __init__(self, params, lr=1e-3, weight_decay=0.1, momentum=0.95, nesterov=True):
+        super().__init__(params, dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov))
+
+    @torch.no_grad()
+    def step(self):
+        for group in self.param_groups:
+            by_shape = {}
+            for p in group["params"]:
+                if p.grad is not None:
+                    by_shape.setdefault(tuple(p.shape), []).append(p)
+            for shape, ps in by_shape.items():
+                grads = torch.stack([p.grad.float() for p in ps])
+                key = ps[0]
+                if "stack" not in self.state[key] or self.state[key]["stack"].shape[0] != len(ps):
+                    self.state[key]["stack"] = torch.zeros_like(grads)
+                buf = self.state[key]["stack"]
+                buf.mul_(group["momentum"]).add_(grads)
+                upd = grads.add(buf, alpha=group["momentum"]) if group["nesterov"] else buf
+                O = newton_schulz(upd)
+                lr = group["lr"]
+                scale = 0.2 * max(shape) ** 0.5  # match the update RMS of AdamW
+                torch._foreach_mul_(ps, 1 - lr * group["weight_decay"])
+                torch._foreach_add_(ps, [o.to(p.dtype) for o, p in zip(O.unbind(0), ps)], alpha=-lr * scale)
+
+
 # ---------------------------------------------------------------- training
 @torch.no_grad()
 def evaluate(model, val, ctx, n_bytes, bs=8):
@@ -171,7 +269,7 @@ def evaluate(model, val, ctx, n_bytes, bs=8):
 
 def train(tok_path, args):
     tok = load(tok_path)
-    sizes = list(tok.sizes.values()) if isinstance(tok, CombinatorialBPE) else [tok.vocab_size]
+    sizes = list(tok.sizes.values()) if hasattr(tok, "sizes") else [tok.vocab_size]  # factored tokenizers
     data, train_bytes = encode_file(tok_path, args.train_text)
     val, val_bytes = encode_file(tok_path, args.val_text, max_chars=args.val_chars)
     bytes_per_tok = train_bytes / len(data)
@@ -185,19 +283,27 @@ def train(tok_path, args):
 
     torch.manual_seed(args.seed)
     model = GPT(sizes, args.d, args.layers, args.heads, args.ctx, args.head, args.head_hidden,
-                [int(c) for c in args.order.split(",")]).cuda()
+                [int(c) for c in args.order.split(",")], args.arch).cuda()
     n_params = sum(p.numel() for p in model.parameters())
     n_emb = sum(e.weight.numel() for e in model.emb)
-    decay = [p for n, p in model.named_parameters() if p.dim() >= 2 and "emb" not in n and "pos" not in n]
-    other = [p for n, p in model.named_parameters() if not (p.dim() >= 2 and "emb" not in n and "pos" not in n)]
-    opt = torch.optim.AdamW([{"params": decay, "weight_decay": 0.1}, {"params": other, "weight_decay": 0.0}],
-                            lr=args.lr, betas=(0.9, 0.95), fused=True)
+    matrices = [p for n, p in model.named_parameters() if p.dim() == 2 and "emb" not in n and "pos" not in n]
+    other = [p for n, p in model.named_parameters() if not (p.dim() == 2 and "emb" not in n and "pos" not in n)]
+    if args.opt == "muon":  # Muon for hidden weight matrices, AdamW for embeddings / norms
+        opts = [BatchedMuon(matrices, lr=args.lr, weight_decay=0.1),
+                torch.optim.AdamW(other, lr=args.lr, weight_decay=0.0, betas=(0.9, 0.95), fused=True)]
+    else:
+        opts = [torch.optim.AdamW([{"params": matrices, "weight_decay": 0.1}, {"params": other, "weight_decay": 0.0}],
+                                  lr=args.lr, betas=(0.9, 0.95), fused=True)]
     tokens_per_step = args.bs * args.ctx
-    assert args.steps * tokens_per_step <= len(data), "would repeat data"
-    # single pass over a random permutation of non-overlapping windows
+    assert args.allow_repeat or args.steps * tokens_per_step <= len(data), "would repeat data (see --allow_repeat)"
+    # a random permutation of non-overlapping windows; with --allow_repeat, further independent
+    # permutations (epochs) follow once the data runs out, so compute can be matched
     g = torch.Generator().manual_seed(args.seed)
     n_windows = (len(data) - 1) // args.ctx
-    order = torch.randperm(n_windows, generator=g)[: args.steps * args.bs] * args.ctx
+    need = args.steps * args.bs
+    order = torch.cat([torch.randperm(n_windows, generator=g) for _ in range(-(-need // n_windows))])[:need] * args.ctx
+    if need > n_windows:
+        print(f"  --allow_repeat: {need / n_windows:.2f} epochs over the training data", flush=True)
 
     log = {"tokenizer": os.path.basename(tok_path), "tag": args.tag or args.head, "sizes": sizes, "params": n_params, "emb_params": n_emb,
            "bytes_per_token": bytes_per_tok, "curve": []}
@@ -216,17 +322,20 @@ def train(tok_path, args):
         if step == args.steps:
             break
         lr = args.lr * min(1, (step + 1) / args.warmup) * 0.5 * (1 + math.cos(math.pi * step / args.steps))
-        for grp in opt.param_groups:
-            grp["lr"] = max(lr, args.lr * 0.1 * min(1, (step + 1) / args.warmup))
+        for opt in opts:
+            for grp in opt.param_groups:
+                grp["lr"] = max(lr, args.lr * 0.1 * min(1, (step + 1) / args.warmup))
         idx = order[step * args.bs:(step + 1) * args.bs]
-        opt.zero_grad(set_to_none=True)
+        for opt in opts:
+            opt.zero_grad(set_to_none=True)
         for chunk in idx.split(args.bs // args.accum):  # gradient accumulation (large vocabs)
             w = torch.stack([data[j:j + args.ctx + 1] for j in chunk.tolist()]).cuda(non_blocking=True).long()
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 nll, _ = model(w[:, :-1], w[:, 1:])
             (nll / (args.bs * args.ctx)).backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        opt.step()
+        for opt in opts:
+            opt.step()
     log["train_s"] = time.time() - t0
     log["final_by_source"] = {}
     for name, (v, vb) in extra.items():
@@ -244,6 +353,8 @@ if __name__ == "__main__":
     ap.add_argument("--val_chars", type=int, default=2_000_000)
     ap.add_argument("--extra_val", nargs="*", default=[], help="extra validation files, scored once at the end")
     ap.add_argument("--steps", type=int, default=2500)
+    ap.add_argument("--allow_repeat", action="store_true",
+                    help="repeat the training data if steps x tokens exceed it (to match compute)")
     ap.add_argument("--bs", type=int, default=32)
     ap.add_argument("--accum", type=int, default=1, help="split each batch into this many micro-batches")
     ap.add_argument("--ctx", type=int, default=512)
@@ -251,6 +362,8 @@ if __name__ == "__main__":
     ap.add_argument("--layers", type=int, default=8)
     ap.add_argument("--heads", type=int, default=8)
     ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--arch", default="gpt2", choices=["gpt2", "modern"])
+    ap.add_argument("--opt", default="adamw", choices=["adamw", "muon"])
     ap.add_argument("--warmup", type=int, default=200)
     ap.add_argument("--eval_every", type=int, default=250)
     ap.add_argument("--seed", type=int, default=0)

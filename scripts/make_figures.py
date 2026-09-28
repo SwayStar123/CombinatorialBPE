@@ -139,6 +139,7 @@ def legend(svg, x, y, entries):
 
 # ------------------------------------------------------------ shared data
 MIX_STD = "mix_32768_bpe_gpt2.json"
+MAIN_LM = "lm_mix3x_modern.json"  # headline run: modern recipe (RoPE, RMSNorm, QK-norm, SwiGLU, Muon)
 MIX_COMB = "mix_32768_comb.json"
 SRC_NAMES = {"en": "English", "de": "German", "fr": "French", "ru": "Russian", "ja": "Japanese", "zh": "Chinese",
              "python": "Python", "javascript": "JavaScript", "java": "Java", "cpp": "C++", "go": "Go"}
@@ -335,8 +336,18 @@ def fig_budget():
 # ------------------------------------------------------------ headline figure
 def fig_headline():
     comp = json.load(open(os.path.join(ROOT, "results", "mix_compression.json")))
-    runs = {r["tokenizer"]: r for r in json.load(open(os.path.join(ROOT, "results", "lm_mix3x.json")))}
+    runs = {r["tokenizer"]: r for r in json.load(open(os.path.join(ROOT, "results", MAIN_LM)))}
     std_lm, comb_lm = runs[MIX_STD], runs[MIX_COMB]
+    old = {r["tokenizer"]: r for r in json.load(open(os.path.join(ROOT, "results", "lm_mix3x.json")))}
+    old_gain = 100 * (1 - old[MIX_COMB]["curve"][-1]["val_bpb"] / old[MIX_STD]["curve"][-1]["val_bpb"])
+
+    def at_bytes(curve, b):
+        pts = [(p["bytes"], p["val_bpb"]) for p in curve if p["step"]]
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            if x0 <= b <= x1:
+                return y0 + (y1 - y0) * (b - x0) / (x1 - x0)
+
+    eq_data = 100 * (at_bytes(comb_lm["curve"], std_lm["curve"][-1]["bytes"]) / std_lm["curve"][-1]["val_bpb"] - 1)
     std_c, comb_c = comp["bpe_gpt2"]["chars_per_token"], comp["comb"]["chars_per_token"]
 
     def fewer_tokens(src):
@@ -366,9 +377,10 @@ def fig_headline():
     tmax, bmax = 60, 10
     svg = SVG(W, 700)
     svg.text(32, 44, "One tokenizer, one model, 11 languages: Combinatorial vs standard BPE", size=20, weight=650)
-    svg.text(32, 68, "Same 32,768 embedding rows, same 8-layer GPT, same compute (22,500 steps × 16k tokens) on "
-             "Wikipedia in 6 languages + GitHub code in 5 languages.", size=13, fill=INK2)
-    y = 112
+    svg.text(32, 68, "Same 32,768 embedding rows, same 8-layer GPT (RoPE, SwiGLU, QK-norm, Muon), same compute "
+             "(22,500 steps × 16k tokens),", size=13, fill=INK2)
+    svg.text(32, 86, "trained on Wikipedia in 6 languages + GitHub code in 5 languages.", size=13, fill=INK2)
+    y = 128
     svg.text(ax0, y, "Fewer tokens for the same text", size=15, weight=650)
     svg.text(bx0, y, "Better language model (lower bits/byte)", size=15, weight=650)
     y += 12
@@ -398,9 +410,11 @@ def fig_headline():
     y += 14
     svg.text(32, y, "Bits per byte on held-out text is tokenizer-independent; standard BPE = byte-level BPE with GPT-2 "
              "pretokenization trained on the same data (the stronger of two baselines).", size=11, fill=INK3)
-    svg.text(32, y + 17, "Combinatorial BPE is also better at equal data (−1.0%) and on every source; with 3× less "
-             "training the two are roughly level. Single seed, 42–45M-parameter models.", size=11, fill=INK3)
-    svg.h = y + 36
+    svg.text(32, y + 17, f"Combinatorial BPE is also better at equal data ({eq_data:+.1f}%) and on every source; "
+             f"with an older GPT-2-style recipe the overall gain is {old_gain:.1f}%.", size=11, fill=INK3)
+    svg.text(32, y + 34, "Single seed per model, 42–45M parameters, learning rate tuned for each tokenizer.",
+             size=11, fill=INK3)
+    svg.h = y + 52
     svg.save("headline.svg", "Combinatorial BPE vs standard BPE on 11 languages",
              f"{tok_all:.0f}% fewer tokens and {bpb_all:.1f}% lower bits per byte overall, better on all 11 sources.")
 
@@ -544,7 +558,7 @@ def train_macs_per_token(run, comb):
 
 def fig_efficiency():
     import math
-    runs = {r["tokenizer"]: r for r in json.load(open(os.path.join(ROOT, "results", "lm_mix3x.json")))}
+    runs = {r["tokenizer"]: r for r in json.load(open(os.path.join(ROOT, "results", MAIN_LM)))}
     std, comb = runs[MIX_STD], runs[MIX_COMB]
     tpstep = std["args"]["bs"] * std["args"]["ctx"]
 
@@ -565,9 +579,11 @@ def fig_efficiency():
     svg = SVG(W, H)
     svg.text(32, 44, "Compute efficiency vs data efficiency (mixed prose + code run)", size=20, weight=650)
     svg.text(32, 68, "Validation bits per byte (lower is better) against training compute and against training text "
-             "read. Same 8-layer GPT, same 32k embedding rows.", size=13, fill=INK2)
+             "read. Same 8-layer GPT (modern recipe), same 32k embedding rows.", size=13, fill=INK2)
     STD_C, COMB_C, MATCH_C = "#6b6b66", HUE["core"][0], HUE["pre"][0]
-    y0, y1, v0, v1 = 110, 400, 1.20, 1.60
+    lowest = min(p[2] for p in S + C)
+    v0 = math.floor((lowest - 0.03) * 20) / 20  # leave room under the curves for the annotations
+    y0, y1, v1 = 110, 400, v0 + 0.40
 
     def panel(px0, px1, k, xmax, xstep, xfmt, xlabel, title, saving_label):
         def X(v):
@@ -579,7 +595,7 @@ def fig_efficiency():
         svg.text(px0 - 48, 100, title, size=15, weight=650)
         cid = f"clip{px0}"
         svg.add(f'<clipPath id="{cid}"><rect x="{px0}" y="{y0}" width="{px1 - px0}" height="{y1 - y0}"/></clipPath>')
-        for v in [1.20, 1.25, 1.30, 1.35, 1.40, 1.45, 1.50, 1.55, 1.60]:
+        for v in [v0 + 0.05 * i for i in range(9)]:
             svg.line(px0, Y(v), px1, Y(v), stroke="#efeee9", sw=1)
             svg.text(px0 - 8, Y(v) + 4, f"{v:.2f}", size=11, fill=INK3, anchor="end")
         t = 0
@@ -603,7 +619,7 @@ def fig_efficiency():
                 f'stroke-width="1.6"/>')
         svg.line(X(xc), Y(target), X(xc), y1, stroke=MATCH_C, sw=1, extra='stroke-dasharray="2 3"')
         svg.line(X(xs), Y(target), X(xs), y1, stroke=MATCH_C, sw=1, extra='stroke-dasharray="2 3"')
-        ya = Y(1.213)
+        ya = Y(v0 + 0.013)
         arrows = 'marker-end="url(#arr)" marker-start="url(#arr)"' if X(xs) - X(xc) > 40 else ""
         svg.line(X(xc) + 2, ya, X(xs) - 2, ya, stroke=MATCH_C, sw=1.4, extra=arrows)
         saving = 100 * (1 - xc / xs)
