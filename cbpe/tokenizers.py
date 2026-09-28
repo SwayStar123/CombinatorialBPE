@@ -438,7 +438,8 @@ def load(path):
         return StandardBPE(CharBPE.from_dict(d), d["pattern"])
     if d["type"] == "unrestricted":
         from .unrestricted import UnrestrictedBPE
-        return UnrestrictedBPE(os.path.join(os.path.dirname(os.path.abspath(path)), d["model"]), d["alphabet"])
+        return UnrestrictedBPE(os.path.join(os.path.dirname(os.path.abspath(path)), d["model"]), d["alphabet"],
+                               d.get("segmentation", "chunks"))
     return CombinatorialBPE(CharBPE.from_dict(d), d["prefixes"], d["suffixes"], d.get("fold_case", True),
                             d.get("punct_to_next", False), d.get("fold_han", False), d.get("split_camel", False),
                             d.get("letter_prefixes", ()), d.get("letter_suffixes", ()))

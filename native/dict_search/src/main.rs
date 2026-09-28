@@ -10,8 +10,8 @@
 //!     B[i] between tokens --prefix--> P[j] --core,variation (1 token)--> C[k] --suffix--> B[l]
 //! (empty prefix/suffix allowed, core never empty), comparing (tokens, secondary cost)
 //! lexicographically. Secondary cost = -log2 q(prefix) - log2 q(core) - log2 q(variation)
-//! - log2 q(suffix). Cost is linear in the number of trie matches (no prefix x core x suffix
-//! enumeration). Out-of-alphabet chars are byte-fallback tokens (one per UTF-8 byte).
+//! - log2 q(suffix) (+ the boundary costs with be_permille). Cost is linear in the number of trie
+//! matches (no prefix x core x suffix enumeration). Out-of-alphabet chars are byte-fallback tokens (one per UTF-8 byte).
 //!
 //! TRAINER (one round):
 //!   1. proposals from a raw-text substring index (frequent substrings, counted once from the
@@ -293,6 +293,55 @@
 //!     -0.13% +- 0.12% against the exact trainer's -0.08% +- 0.13% over 4 runs with other thread
 //!     counts (float summation order alone), and 77-80% of sampled held-out chunks were segmented
 //!     as by the reference model, as for the exact runs (78-83%): within run-to-run noise.
+//!     u32 be_permille, u32 be_order (read after prune_tail_ppm, in this order; be_permille = 0 = off,
+//!     exactly the old trainer, encoder and model file): BRANCHING-ENTROPY BOUNDARY COST (a tie-break).
+//!     Unsupervised word-segmentation evidence (Tanaka-Ishii's branching entropy / accessor variety;
+//!     Hu et al. 2025, entropy-driven pre-tokenization): a word boundary lies where the next char is
+//!     hard to predict from the chars before and the previous char hard to predict from the chars
+//!     after. In text without spaces (Chinese, Japanese: hybrid chunks are whole clauses) equal-count
+//!     parses often differ only in where a boundary goes (观光:局:首|度 vs 观光局|首度), which the token
+//!     count cannot tell apart. Statistics, fixed from the raw training text (the unique segments
+//!     with their counts) before the first round (build_be): for every context of k = 1..n chars
+//!     (n = be_order, 0 = 1) inside a segment, H_R(c) = entropy in bits of the char following c (the
+//!     segment's end counts as one more outcome) and H_L(c) = entropy of the char preceding c (the
+//!     start counts), kept if k = 1 or c was seen >= BE_MIN (20) times (weighted), quantised to
+//!     1/16 bit. At position i of a text (between x[i-1] and x[i], 0 < i < len) the right side is
+//!     H_R of x[i-n..i] and the left side H_L of x[i..i+n], each with the longest kept context
+//!     (shorter near the text's ends; a side with no kept context gets the count-weighted median of
+//!     the single chars' entropies), and the score s(i) = H_R + H_L. It is normalised to
+//!     b(i) = its percentile among the inner positions of the training text of the same CLASS
+//!     (count-weighted, mid-rank), so b is in [0, 1] and uniform over each class: the class of i is
+//!     the script group (the input's script table, as for the rarity cost) of x[i-1] and x[i] if they
+//!     agree, else one more class for a change of script. (With one global percentile every Han /
+//!     kana position scored b > 0.9, since Latin and code text inside a chunk is far more
+//!     predictable, and the costs hardly differed inside a clause.) Contexts are raw symbols (not
+//!     case/Han-folded); all scripts are treated alike: it only orders parses of equal primary cost.
+//!     Order: at 5M chars per source the score predicted SIGHAN (pku / msr) word boundaries with ROC
+//!     AUC 0.83 / 0.81 at order 1, 0.74 at order 2 and 0.71 at orders 3 and 4 (a longer context is
+//!     kept only where frequent, and the backed-off positions mix entropies of different orders),
+//!     hence the default 1.
+//!     COST: every boundary a parse places at an inner position i pays be x (1 - b(i)) bits in the
+//!     SECONDARY cost only (be = be_permille / 1000 bits): token boundaries AND the factor
+//!     boundaries inside a token (prefix|core, core|suffix) alike, i.e. every distinct position that
+//!     a non-empty piece (prefix, core, suffix, fallback char) ends at; an empty affix places no
+//!     boundary, the text's ends cost nothing. So among parses with the same primary cost, one whose
+//!     boundaries sit where the text branches (high entropy) wins. The primary cost (tokens and every
+//!     primary term), row prices, losses, gains and round scores are unchanged: only the tie-breaks
+//!     of the parse, and through them the parse's statistics (q, pairs, types), change. Note that
+//!     every primary term beyond the token count (lambda's affix bits above all: lambda_permille 20
+//!     separates nearly every pair of factorings by a few hundredths of a token) leaves it few ties
+//!     to break: at 5M chars per source, 64k, lambda 20, even be = 64 bits moved 14 of ~61k token
+//!     boundaries of 3000 SIGHAN lines (with lambda zeroed at encoding, 0.5-1.5% of them).
+//!     Everywhere the DP runs (the 3-state DP and its windowed / resumed exact re-scoring, the
+//!     pairwise DP of mu2 / lamc / code_len and its extra_pair_wins filter and resumed re-scoring,
+//!     encoding) the cost of position i is added once to every entry of i when i is processed (all
+//!     entries of i were reached by a piece ending at i; the empty closures then carry it on), so the
+//!     DPs stay exact and the incremental re-scoring paths bit-identical to full re-parses. Texts
+//!     parsed out of context (a token type's text when pruning checks which rows its replacement
+//!     uses) get the costs of that text alone (contexts cut at its ends); parses whose primary cost
+//!     is all that is read (proposal values, prune losses) skip the costs (parse_prim: the primary
+//!     cost of the best parse is the same, up to better's 1e-9 tolerance).
+//!     The model file then ends with the statistics (see MODEL), so encoding reproduces the costs.
 //!     u32 case_cores (read after swap_share_permille; 0 = off, exactly the old trainer):
 //!     CASE-PRESERVING CORES. A core row is still keyed by its folded string (one row per folded
 //!     form), but it also stores a CANONICAL SPELLING: its most frequent written form in the raw
@@ -338,6 +387,16 @@
 //!     1 / 1024 bit (CL_Q; training uses exactly these quantised values). Every other pair is
 //!     -log2 q(a) (the row cost above, or the variation cost) + the core's offset. (The core row
 //!     costs are -log2 p(c).) Older readers ignore the section.
+//!     be_permille models end (after every section above) with u32 BE_MAGIC ("BENT"), f64 be (bits
+//!     per unit of boundary cost), u32 order, u32 fallback entropy of the right and of the left side
+//!     (1/16 bit), u32 n_classes, u32 n_q (511), f32 percentile[n_classes x n_q] (per position class,
+//!     of every score H_R + H_L in 1/16 bit), u32 n_g, u8 script group[n_g] (per alphabet char; a
+//!     char beyond it, or out of the alphabet, is group 0; class = the group of both chars, or
+//!     n_classes - 1 if they differ), u32 n,
+//!     u32 byte length, then the n kept contexts by increasing 32-bit key as a LEB128 varint key gap
+//!     (the first: the key; then key - previous - 1) and a u8 entropy (1/16 bit). The key of the
+//!     context c on side d (0: the chars before a position, 1: after) is the top 32 bits of
+//!     seq_hash(0xFFFFFF00 + d, c...). Training uses exactly this table.
 //! WORDS: u64 n, u64 n_ids, u32 lens[n], u32 ids[n_ids]
 //! OUTPUT: per segment u32 n_tokens, then n x (u32 variation, u32 prefix, u32 core, u32 suffix);
 //!     core = u32::MAX: one out-of-alphabet char (byte fallback)
@@ -1043,6 +1102,7 @@ struct Dict<'a> {
     frag: &'a [HashMap<u64, f32, Fast>; 3], // glue scores by string hash: cores (folded), prefixes, suffixes (raw)
     pricing: &'a Pricing,
     cl: CodeLen, // code_len statistics (cl.on = false: off)
+    be: &'a BoundEnt, // be_permille: branching-entropy boundary costs (be.w = 0: off)
 }
 
 /// 64-bit hash of a symbol string (splitmix64 steps; symbol 0 and leading symbols all count,
@@ -1336,6 +1396,219 @@ fn fragment_scores(sym: &Symbols, x: &[u32], wt: &[u32], subs: &[(u32, u16, u32)
     [out, pre, suf]
 }
 
+// ------------------------------------------------------------------ branching-entropy boundaries
+
+/// model file section of the boundary statistics (be_permille)
+const BE_MAGIC: u32 = u32::from_le_bytes(*b"BENT");
+/// context key tags: + 0 the chars before a position (right-branching), + 1 the chars after it
+/// (left-branching)
+const BE_TAG: u32 = 0xFFFF_FF00;
+/// contexts longer than one char are kept only if seen at least this often (weighted)
+const BE_MIN: f64 = 20.0;
+/// entropies are kept in units of 1/16 bit (u8, so at most 15.9 bits); a position's score is the
+/// sum of its two sides (0..=510)
+const BE_Q: f64 = 16.0;
+const BE_NS: usize = 511;
+
+/// Branching-entropy boundary statistics (be_permille, see the header): the quantised entropy of
+/// every kept context by its 32-bit key, the per-side fallback for unseen contexts, the script
+/// group of every alphabet char, and per position class the percentile of every score among the
+/// training text's positions of that class.
+#[derive(Default)]
+struct BoundEnt {
+    w: f64, // bits per unit of boundary cost (0 = off)
+    order: usize,
+    tab: HashMap<u32, u8, Fast>,
+    med: [u8; 2],
+    grp: Vec<u8>,  // script group per alphabet char (empty: all 0)
+    ncls: usize,   // position classes: one per group, and the last for a change of group
+    cdf: Vec<f32>, // ncls x BE_NS
+}
+
+impl BoundEnt {
+    /// 32-bit key of a context on side dir (0: the chars before a position, 1: after)
+    #[inline]
+    fn key(dir: usize, ctx: &[u32]) -> u32 {
+        (Self::hash(dir, ctx) >> 32) as u32
+    }
+    #[inline]
+    fn hash(dir: usize, ctx: &[u32]) -> u64 {
+        seq_hash(std::iter::once(BE_TAG + dir as u32).chain(ctx.iter().copied()))
+    }
+    /// quantised branching entropy on side dir of position i of x: dir 0 the entropy of what
+    /// follows the chars x[i - k..i], dir 1 of what precedes x[i..i + k], with the longest kept
+    /// context (k <= order, within x); the side's median if none is kept
+    fn side(&self, dir: usize, x: &[u32], i: usize) -> u8 {
+        let kmax = if dir == 0 { i } else { x.len() - i }.min(self.order);
+        for k in (1..=kmax).rev() {
+            let ctx = if dir == 0 { &x[i - k..i] } else { &x[i..i + k] };
+            if let Some(&v) = self.tab.get(&Self::key(dir, ctx)) {
+                return v;
+            }
+        }
+        self.med[dir]
+    }
+    #[inline]
+    fn score(&self, x: &[u32], i: usize) -> usize {
+        self.side(0, x, i) as usize + self.side(1, x, i) as usize
+    }
+    /// script group of a symbol (0 for out-of-alphabet chars and without script information)
+    #[inline]
+    fn group(&self, c: u32) -> usize {
+        self.grp.get(c as usize).copied().unwrap_or(0) as usize
+    }
+    /// class of inner position i: the script group of x[i - 1] and x[i] if they agree, else the
+    /// last class (a change of script)
+    #[inline]
+    fn class(&self, x: &[u32], i: usize) -> usize {
+        let (a, b) = (self.group(x[i - 1]), self.group(x[i]));
+        if a == b { a } else { self.ncls - 1 }
+    }
+    /// b(i): the percentile of i's score among the training positions of its class
+    #[inline]
+    fn b(&self, x: &[u32], i: usize) -> f64 {
+        self.cdf[self.class(x, i) * BE_NS + self.score(x, i)] as f64
+    }
+    /// the boundary cost of every position 0..=n of x into out: w x (1 - b(i)) inside, 0 at both
+    /// ends (every parse has those); out is left empty if off
+    fn fill(&self, x: &[u32], out: &mut Vec<f64>) {
+        out.clear();
+        if self.w == 0.0 {
+            return;
+        }
+        let n = x.len();
+        out.resize(n + 1, 0.0);
+        for i in 1..n {
+            out[i] = self.w * (1.0 - self.b(x, i));
+        }
+    }
+}
+
+/// The boundary statistics of the training text (unique segments with their counts): for every
+/// context of 1..=order chars and both sides, the entropy of the char that follows it (side 0) /
+/// precedes it (side 1) in the segments, the segment's end / start being one more outcome;
+/// contexts of more than one char only if seen >= BE_MIN times. Then per position class (script
+/// group, or a change of group; `script`: group per alphabet char, may be empty) the percentile
+/// table of the scores of its inner positions (weighted by count, mid-rank).
+fn build_be(c: &Corpus, order: usize, w: f64, script: &[u8], threads: usize) -> BoundEnt {
+    let t0 = Instant::now();
+    let threads = threads.max(1);
+    let ncls = script.iter().map(|&g| g as usize + 1).max().unwrap_or(1) + 1;
+    let mut be = BoundEnt { w, order, tab: HashMap::default(), med: [0; 2], grp: script.to_vec(), ncls, cdf: Vec::new() };
+    // (sharded by context hash: each task counts its share of the contexts in one scan, so at most
+    // `threads` of the 4 x threads shards are in memory at a time)
+    let shards = 4 * threads;
+    let mut n_ctx = [[0usize; 8]; 2];
+    for dir in 0..2 {
+        let mut med_hist = [0.0f64; 256];
+        for k in 1..=order {
+            let parts: Vec<Vec<(u64, u8, f64)>> = par_map(shards, threads, 1, || (), |_, sh| {
+                let mut cnt: HashMap<(u64, u32), f64, Fast> = HashMap::default();
+                for (x, &f) in c.segs.iter().zip(&c.freqs) {
+                    let n = x.len();
+                    if n < k {
+                        continue;
+                    }
+                    for i in if dir == 0 { k..n + 1 } else { 0..n - k + 1 } {
+                        let (ctx, out) = if dir == 0 {
+                            (&x[i - k..i], x.get(i).copied().unwrap_or(NONE))
+                        } else {
+                            (&x[i..i + k], if i == 0 { NONE } else { x[i - 1] })
+                        };
+                        let h = BoundEnt::hash(dir, ctx);
+                        if (h % shards as u64) as usize == sh {
+                            *cnt.entry((h, out)).or_insert(0.0) += f;
+                        }
+                    }
+                }
+                // per context: n = sum of its outcome counts m, s = sum m log2 m; H = log2 n - s / n
+                let mut pairs: Vec<((u64, u32), f64)> = cnt.into_iter().collect();
+                pairs.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+                let mut out: Vec<(u64, u8, f64)> = Vec::new();
+                let mut j = 0;
+                while j < pairs.len() {
+                    let h = pairs[j].0 .0;
+                    let (mut n, mut s) = (0.0f64, 0.0f64);
+                    while j < pairs.len() && pairs[j].0 .0 == h {
+                        let m = pairs[j].1;
+                        n += m;
+                        s += m * m.log2();
+                        j += 1;
+                    }
+                    if k == 1 || n >= BE_MIN {
+                        out.push((h, ((n.log2() - s / n).max(0.0) * BE_Q).round().min(255.0) as u8, n));
+                    }
+                }
+                out
+            });
+            for part in parts {
+                for (h, q, n) in part {
+                    // (a 32-bit key shared by two contexts keeps the first one's entropy)
+                    be.tab.entry((h >> 32) as u32).or_insert(q);
+                    n_ctx[dir][k - 1] += 1;
+                    if k == 1 {
+                        med_hist[q as usize] += n;
+                    }
+                }
+            }
+        }
+        // the fallback of an unseen context: the count-weighted median of the single chars' entropies
+        let tot: f64 = med_hist.iter().sum();
+        let mut acc = 0.0;
+        be.med[dir] = med_hist
+            .iter()
+            .position(|&h| {
+                acc += h;
+                acc >= tot / 2.0
+            })
+            .unwrap_or(0) as u8;
+    }
+    // percentiles of the scores of the inner positions, per class
+    const B: usize = 4096;
+    let be_ref = &be;
+    let hists: Vec<Vec<f64>> = par_map(c.segs.len().div_ceil(B), threads, 1, || (), |_, b| {
+        let mut h = vec![0.0f64; ncls * BE_NS];
+        for si in b * B..((b + 1) * B).min(c.segs.len()) {
+            let x = &c.segs[si];
+            for i in 1..x.len() {
+                h[be_ref.class(x, i) * BE_NS + be_ref.score(x, i)] += c.freqs[si];
+            }
+        }
+        h
+    });
+    let mut hist = vec![0.0f64; ncls * BE_NS];
+    for h in hists {
+        for (a, b) in hist.iter_mut().zip(h) {
+            *a += b;
+        }
+    }
+    let mut cdf: Vec<f32> = Vec::with_capacity(ncls * BE_NS);
+    let mut summary = Vec::new();
+    for (k, hs) in hist.chunks(BE_NS).enumerate() {
+        let tot: f64 = hs.iter().sum();
+        let mut below = 0.0;
+        let from = cdf.len();
+        cdf.extend(hs.iter().map(|&h| {
+            let v = if tot > 0.0 { (below + h / 2.0) / tot } else { 0.5 };
+            below += h;
+            v as f32
+        }));
+        if tot > 0.0 {
+            // (the mean side entropy, in bits, at the 10/50/90th percentile of the class's positions)
+            let q = |p: f64| cdf[from..].iter().position(|&v| v as f64 >= p).unwrap_or(BE_NS - 1) as f64 / BE_Q / 2.0;
+            let name = if k + 1 == ncls { "change".to_string() } else { format!("group {k}") };
+            summary.push(format!("{name}: {:.1}M, {:.2}/{:.2}/{:.2}", tot / 1e6, q(0.1), q(0.5), q(0.9)));
+        }
+    }
+    be.cdf = cdf;
+    eprintln!("  boundary entropy (be {w} bits, order {order}): {} contexts kept (before / after, by length: {:?} / {:?}), \
+               median side entropy {:.2} / {:.2} bits ({:.1}s); inner positions per class and their mean side entropy at the \
+               10/50/90th percentile: {}",
+              be.tab.len(), &n_ctx[0][..order], &n_ctx[1][..order], be.med[0] as f64 / BE_Q, be.med[1] as f64 / BE_Q,
+              t0.elapsed().as_secs_f64(), summary.join("; "));
+    be
+}
+
 /// The trie arcs of a text (Dict::arcs_x): arcs[start[3i + k]..start[3i + k + 1]] leave position i
 /// by walk k (0 prefixes, 1 cores, 2 suffixes).
 #[derive(Default)]
@@ -1389,6 +1662,7 @@ struct Scratch {
     slot: Vec<u32>, // parse_pair: index in ce[k] of the entry of core arc q and variation state vs
     pbc: Vec<(u32, f64)>, // parse_pair, code_len: per core arc, the last prefix id and its bits given the core
     sm: Vec<(usize, u32, f64, f64, u8)>,
+    bc: Vec<f64>, // be_permille: the boundary cost of every position of the text being parsed (empty: off)
 }
 
 impl Scratch {
@@ -1404,6 +1678,7 @@ impl Scratch {
             slot: vec![],
             pbc: vec![],
             sm: vec![],
+            bc: vec![],
         }
     }
 }
@@ -2122,6 +2397,18 @@ impl<'a> Dict<'a> {
         // and every bit also costs w in the primary
         let (cl, w) = (self.cl.on, self.cl.w);
         let empty_p = (lam * cp[0] + mu * sp[0], if cl { 0.0 } else { cp[0] });
+        if !sc.bc.is_empty() && sc.bc[i] != 0.0 {
+            // be_permille: the boundary cost of i on every entry reached by a piece ending here (as
+            // step_xp; sc.bc = the text's boundary costs, filled by the caller)
+            let b = sc.bc[i];
+            sc.bs[i].1 += b;
+            for e in sc.pe[i].iter_mut() {
+                e.s.1 += b;
+            }
+            for e in sc.ce[i].iter_mut() {
+                e.s.1 += b;
+            }
+        }
         {
             // empty suffix: core-done -> between tokens
             for idx in 0..sc.ce[i].len() {
@@ -2298,15 +2585,38 @@ impl<'a> Dict<'a> {
     #[inline(always)]
     #[allow(clippy::too_many_arguments)]
     fn step_x<const BACK: bool>(&self, x: &[u32], i: usize, d: &mut [Vec<(f64, f64)>; 3], back: &mut [Vec<Back>; 3], off: usize,
-                                ban: Ban, extra: Option<&Extra>, close: bool, arcs: Option<&Arcs>) {
-        self.step_xp::<BACK>(x, i, d, back, off, ban, extra, close, arcs, |_| {});
+                                ban: Ban, extra: Option<&Extra>, close: bool, arcs: Option<&Arcs>, bc: &[f64]) {
+        self.step_xp::<BACK>(x, i, d, back, off, ban, extra, close, arcs, bc, |_| {});
     }
 
     /// step_x, calling probe(d) at the point where an extra row's arc out of i is relaxed (after the
     /// closures and the byte arc, before the trie arcs; only if i < n)
+    /// be_permille (bc = the text's boundary costs, Dict::be_fill; empty = off): every entry of
+    /// position i was reached by a non-empty piece ending at i, so with `close` the boundary cost
+    /// of i is added to all of them once, before the closures (which then carry it on): every parse
+    /// through i pays it exactly once, and entries are compared among themselves (all or none of
+    /// them carry it) exactly as without it. Scores of positions > i are pending and never carry it.
     #[inline(always)]
     #[allow(clippy::too_many_arguments)]
     fn step_xp<const BACK: bool>(&self, x: &[u32], i: usize, d: &mut [Vec<(f64, f64)>; 3], back: &mut [Vec<Back>; 3], off: usize,
+                                 ban: Ban, extra: Option<&Extra>, close: bool, arcs: Option<&Arcs>, bc: &[f64],
+                                 probe: impl FnMut(&[Vec<(f64, f64)>; 3])) {
+        if close && !bc.is_empty() && bc[i] != 0.0 {
+            let b = bc[i];
+            for (s, ds) in d.iter_mut().enumerate() {
+                let k = self.wid(s);
+                for e in &mut ds[(i - off) * k..(i - off + 1) * k] {
+                    e.1 += b;
+                }
+            }
+        }
+        self.step_xs::<BACK>(x, i, d, back, off, ban, extra, close, arcs, probe)
+    }
+
+    /// step_xp without the boundary cost
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    fn step_xs<const BACK: bool>(&self, x: &[u32], i: usize, d: &mut [Vec<(f64, f64)>; 3], back: &mut [Vec<Back>; 3], off: usize,
                                  ban: Ban, extra: Option<&Extra>, close: bool, arcs: Option<&Arcs>,
                                  mut probe: impl FnMut(&[Vec<(f64, f64)>; 3])) {
         if self.ca {
@@ -2631,7 +2941,7 @@ impl<'a> Dict<'a> {
 
     /// parse_x(x).0's DP (no ban, no extra, mu2 = lamc = 0) from the recorded arcs: every
     /// position's final scores into d.
-    fn scores_x(&self, x: &[u32], a: &Arcs, d: &mut [Vec<(f64, f64)>; 3], nob: &mut [Vec<Back>; 3]) {
+    fn scores_x(&self, x: &[u32], a: &Arcs, d: &mut [Vec<(f64, f64)>; 3], nob: &mut [Vec<Back>; 3], bc: &[f64]) {
         let n = x.len();
         for s in 0..3 {
             d[s].clear();
@@ -2639,7 +2949,7 @@ impl<'a> Dict<'a> {
         }
         d[0][0] = (0.0, 0.0);
         for i in 0..=n {
-            self.step_x::<false>(x, i, d, nob, 0, None, None, true, Some(a));
+            self.step_x::<false>(x, i, d, nob, 0, None, None, true, Some(a), bc);
         }
     }
 
@@ -2656,7 +2966,7 @@ impl<'a> Dict<'a> {
     /// the next occurrence or to the end (whose score is then fin[0][n]). A window that never
     /// rejoins (e changed the parse) runs to the end of x.
     fn parse_x_window(&self, x: &[u32], arcs: &Arcs, fin: &[Vec<(f64, f64)>; 3], occ: &[u32], lmax: usize, e: &Extra,
-                      w: &mut [Vec<(f64, f64)>; 3], nob: &mut [Vec<Back>; 3]) -> f64 {
+                      w: &mut [Vec<(f64, f64)>; 3], nob: &mut [Vec<Back>; 3], bc: &[f64]) -> f64 {
         let n = x.len();
         let same = |w: &[Vec<(f64, f64)>; 3], p: usize, off: usize| {
             (0..3).all(|s| {
@@ -2686,7 +2996,7 @@ impl<'a> Dict<'a> {
                     let k = self.wid(s);
                     w[s][(i - off) * k..(i - off + 1) * k].copy_from_slice(&fin[s][i * k..(i + 1) * k]);
                 }
-                self.step_x::<false>(x, i, w, nob, off, None, None, false, Some(arcs));
+                self.step_x::<false>(x, i, w, nob, off, None, None, false, Some(arcs), bc);
             }
             // the DP with e from a on; `run` = number of positions just processed whose final scores
             // equal the plain parse's (those before a all do), `reach` = end of e's arcs so far
@@ -2700,7 +3010,7 @@ impl<'a> Dict<'a> {
                     }
                     end = want;
                 }
-                self.step_x::<false>(x, i, w, nob, off, None, Some(e), true, Some(arcs));
+                self.step_x::<false>(x, i, w, nob, off, None, Some(e), true, Some(arcs), bc);
                 if i == n {
                     return w[0][n - off].0;
                 }
@@ -2772,6 +3082,21 @@ impl<'a> Dict<'a> {
 
     fn parse_x(&self, x: &[u32], sc: &mut Scratch, out: Option<&mut Vec<Tok>>, ban: Ban, extra: Option<&Extra>)
         -> (f64, f64) {
+        self.be.fill(x, &mut sc.bc);
+        self.parse_xb(x, sc, out, ban, extra)
+    }
+
+    /// primary cost of the best parse of x, without the boundary cost (be_permille: it only breaks
+    /// ties, so the primary cost is the same up to better's 1e-9 tolerance): for callers that read
+    /// only the primary cost (proposal values, prune losses), which then skip computing it
+    fn parse_prim(&self, x: &[u32], sc: &mut Scratch, ban: Ban) -> f64 {
+        sc.bc.clear();
+        self.parse_xb(x, sc, None, ban, None).0
+    }
+
+    /// parse_x with the boundary costs already in sc.bc (empty: none)
+    fn parse_xb(&self, x: &[u32], sc: &mut Scratch, out: Option<&mut Vec<Tok>>, ban: Ban, extra: Option<&Extra>)
+        -> (f64, f64) {
         if self.mu2 > 0.0 || self.lamc > 0.0 || self.cl.on {
             return self.parse_pair(x, sc, out, ban, extra);
         }
@@ -2784,7 +3109,7 @@ impl<'a> Dict<'a> {
             }
             sc.d[0][0] = (0.0, 0.0);
             for i in 0..=n {
-                self.step_x::<false>(x, i, &mut sc.d, &mut sc.back, 0, ban, extra, true, None);
+                self.step_x::<false>(x, i, &mut sc.d, &mut sc.back, 0, ban, extra, true, None, &sc.bc);
             }
             return sc.d[0][n];
         }
@@ -2800,7 +3125,7 @@ impl<'a> Dict<'a> {
         }
         sc.d[0][0] = (0.0, 0.0);
         for i in 0..=n {
-            self.step_x::<true>(x, i, &mut sc.d, &mut sc.back, 0, ban, extra, true, None);
+            self.step_x::<true>(x, i, &mut sc.d, &mut sc.back, 0, ban, extra, true, None, &sc.bc);
         }
         let res = sc.d[0][n];
         if let Some(out) = out {
@@ -2893,7 +3218,12 @@ impl<'a> Dict<'a> {
         let l = e.s.len();
         let (delta, lam, mu) = (self.delta, self.lam, self.mu);
         let ex = Some(e);
-        // a new core-done entry at k: does it improve a B score (empty suffix, or a suffix arc)?
+        // be_permille: an entry at position k carries k's boundary cost once final (pair_step), so a
+        // replayed relaxation into k is compared with the final entries with it added
+        let bat = |k: usize| if sc.bc.is_empty() { 0.0 } else { sc.bc[k] };
+        let at = |c: (f64, f64), k: usize| (c.0, c.1 + bat(k));
+        // a new core-done entry at k (its score with k's boundary cost): does it improve a B score
+        // (empty suffix, or a suffix arc)?
         let private_ce = |ce: &CEnt, k: usize, sm: &mut Vec<(usize, u32, f64, f64, u8)>| -> bool {
             if better(self.pair_close(ce), sc.bs[k]) {
                 return true;
@@ -2901,7 +3231,7 @@ impl<'a> Dict<'a> {
             if k < n {
                 self.pair_suffix_arcs(x, k, None, ex, sm);
                 for &arc in sm.iter() {
-                    if self.pair_bs(ce, arc, ex).is_some_and(|c| better(c, sc.bs[arc.0])) {
+                    if self.pair_bs(ce, arc, ex).is_some_and(|c| better(at(c, arc.0), sc.bs[arc.0])) {
                         return true;
                     }
                 }
@@ -2933,6 +3263,7 @@ impl<'a> Dict<'a> {
                         continue;
                     }
                     let s = (b.0 + delta + lam * e.cost + mu * e.spec + e.usec, b.1 + if self.cl.on { 0.0 } else { e.cost });
+                    let s = at(s, i + l);
                     let states: u16 = if self.ca { vs_start(self.extra_tm(x, i, e).unwrap()) } else { 1 };
                     let a = i + l;
                     if a == n {
@@ -2947,6 +3278,7 @@ impl<'a> Dict<'a> {
                         for &arc in cm.iter() {
                             let Some((v, vs2, c)) = self.pair_ce(&pe, arc, ex, || self.pair_pb(EXTRA, arc.1, ex)) else { continue };
                             let k = arc.0;
+                            let c = at(c, k);
                             match sc.ce[k].iter().find(|o| o.cid == arc.1 && o.vs == vs2) {
                                 Some(o) => {
                                     if better(c, o.s) {
@@ -2969,7 +3301,7 @@ impl<'a> Dict<'a> {
                     let Some(&arc) = cm.iter().find(|a| a.1 == EXTRA) else { continue };
                     for pe in &sc.pe[i] {
                         let Some((v, vs2, c)) = self.pair_ce(pe, arc, ex, || self.pair_pb(pe.pid, EXTRA, ex)) else { continue };
-                        let ce = CEnt { cid: EXTRA, v, vs: vs2, s: c, fpos: 0, fidx: 0 };
+                        let ce = CEnt { cid: EXTRA, v, vs: vs2, s: at(c, arc.0), fpos: 0, fidx: 0 };
                         if private_ce(&ce, arc.0, sm) {
                             return true;
                         }
@@ -2980,7 +3312,7 @@ impl<'a> Dict<'a> {
                     self.pair_suffix_arcs(x, i, None, ex, sm);
                     let Some(&arc) = sm.iter().find(|a| a.1 == EXTRA) else { continue };
                     for ce in &sc.ce[i] {
-                        if self.pair_bs(ce, arc, ex).is_some_and(|c| better(c, sc.bs[arc.0])) {
+                        if self.pair_bs(ce, arc, ex).is_some_and(|c| better(at(c, arc.0), sc.bs[arc.0])) {
                             return true;
                         }
                     }
@@ -3894,7 +4226,7 @@ fn prune_to(d: &mut Dict, c: &Corpus, budget: usize, threads: usize, protect_cha
         let term_of = |d: &Dict, (sc, text): &mut (Scratch, Vec<u32>), ban: (usize, u32), ti: u32| -> f64 {
             let (t, n) = &types[ti as usize];
             d.token_text_into(t, text);
-            let (alt, _) = d.parse(text, sc, None, Some(ban));
+            let alt = d.parse_prim(text, sc, Some(ban));
             n * (if alt.is_infinite() { 1e6 } else { (alt - own_of(d, t)).max(0.0) })
         };
         let new_sc = || (Scratch::new(), Vec::new());
@@ -4349,7 +4681,7 @@ fn propose(d: &Dict, x: &[u32], subs: &[(u32, u16, u32)], excl: &[u32], use_dire
     let tq = Instant::now();
     let mut vals: Vec<(f64, usize)> = par_map(subs.len(), threads, 1024, Scratch::new, |sc, k| {
         let (p, l, _) = subs[k];
-        let (t, _) = d.parse(&x[p as usize..p as usize + l as usize], sc, None, None);
+        let t = d.parse_prim(&x[p as usize..p as usize + l as usize], sc, None);
         (t > 1.0 + 1e-9 && excl[k] > 0).then(|| (excl[k] as f64 * (t - 1.0), k))
     })
     .into_iter()
@@ -5303,7 +5635,7 @@ fn exact_gains(d: &Dict, c: &Corpus, base: &[f64], cands: &[RowKey], occ: usize,
 /// resumed DP.
 const WINDOW_MIN_LEN: f64 = 48.0;
 
-type WinScratch = (Arcs, [Vec<(f64, f64)>; 3], [Vec<(f64, f64)>; 3], [Vec<Back>; 3], Vec<(u32, u32)>, Vec<u32>, [Vec<(f64, f64)>; 3]);
+type WinScratch = (Arcs, [Vec<(f64, f64)>; 3], [Vec<(f64, f64)>; 3], [Vec<Back>; 3], Vec<(u32, u32)>, Vec<u32>, [Vec<(f64, f64)>; 3], Vec<f64>);
 
 /// The last step of exact_gains for parse_x (mu2 = lamc = 0), by segment instead of by candidate:
 /// the same values (parse_x_window, or with `snap` the resumed DP for segments of up to 256 chars),
@@ -5337,7 +5669,7 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
         let by_seg = Csr::new(ns, post.iter().map(|p| Some(p.0)));
         let segs: Vec<u32> = (0..ns as u32).filter(|&si| !by_seg.get(si as usize).is_empty()).collect();
         let new_ws = || -> WinScratch { Default::default() };
-        let js: Vec<Vec<f64>> = par_map(segs.len(), threads, 1, new_ws, |(arcs, fin, w, nob, hits, occ, snaps): &mut WinScratch, q| {
+        let js: Vec<Vec<f64>> = par_map(segs.len(), threads, 1, new_ws, |(arcs, fin, w, nob, hits, occ, snaps, bc): &mut WinScratch, q| {
             let si = segs[q] as usize;
             let x = &c.segs[si];
             let ps = by_seg.get(si);
@@ -5385,6 +5717,8 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
             }
             // the plain parse, from the text's arcs (walked once for all its candidates)
             d.arcs_x(x, arcs);
+            d.be.fill(x, bc);
+            let bc = &bc[..];
             if snap && x.len() <= 256 {
                 // Short segments. The DP with e does exactly what the plain DP does as long as none
                 // of e's arcs wins a relaxation (extra_wins): so where that never happens its score
@@ -5443,7 +5777,7 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
                     let mut any = false;
                     let occ_i = &occs[o0..o];
                     let won_ref = &mut won;
-                    d.step_xp::<false>(x, i, fin, nob, 0, None, None, true, Some(arcs), |dd| {
+                    d.step_xp::<false>(x, i, fin, nob, 0, None, None, true, Some(arcs), bc, |dd| {
                         for &(_, r) in occ_i {
                             if won_ref[r as usize] == NOT {
                                 let e = &extras[post[ps[r as usize] as usize].2 as usize];
@@ -5511,7 +5845,7 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
                     let mut run = a;
                     let mut i = a;
                     res[r] = loop {
-                        d.step_x::<false>(x, i, w, nob, a, None, Some(e), true, Some(arcs));
+                        d.step_x::<false>(x, i, w, nob, a, None, Some(e), true, Some(arcs), bc);
                         if i == n {
                             break w[0][n - a].0;
                         }
@@ -5531,7 +5865,7 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
                 .max()
                 .unwrap_or(0)
                 .max(1);
-            d.scores_x(x, arcs, fin, nob);
+            d.scores_x(x, arcs, fin, nob, bc);
             let mut h = 0;
             (0..ps.len())
                 .map(|r| {
@@ -5541,7 +5875,7 @@ fn exact_gains_windowed<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, ba
                         h += 1;
                     }
                     let e = &extras[post[ps[r] as usize].2 as usize];
-                    d.parse_x_window(x, arcs, fin, occ, seg_lmax.max(e.s.len()), e, w, nob)
+                    d.parse_x_window(x, arcs, fin, occ, seg_lmax.max(e.s.len()), e, w, nob, bc)
                 })
                 .collect()
         });
@@ -5635,6 +5969,8 @@ fn exact_gains_pair<P: Iterator<Item = (u32, f64)>>(d: &Dict, c: &Corpus, base: 
             // position the arcs of the positions before can reach) at every first position
             type Snap = (Vec<(f64, f64)>, Vec<Vec<PEnt>>, Vec<Vec<CEnt>>);
             let mut snaps: Vec<Snap> = Vec::with_capacity(firsts.len());
+            d.be.fill(x, &mut sc.bc);
+            sc2.bc.clone_from(&sc.bc);
             d.pair_init(n, sc);
             let mut f = 0;
             for i in 0..=n {
@@ -5908,6 +6244,28 @@ fn save(d: &Dict, n_sym: usize, path: &str) {
             w.write_all(&buf).unwrap();
         }
     }
+    if d.be.w > 0.0 {
+        // boundary statistics: w, order, the two fallbacks, the percentile table, then the kept
+        // contexts by increasing key as (varint key gap, u8 entropy)
+        let be = d.be;
+        put(&mut w, &[BE_MAGIC]);
+        w.write_all(&be.w.to_le_bytes()).unwrap();
+        put(&mut w, &[be.order as u32, be.med[0] as u32, be.med[1] as u32, be.ncls as u32, BE_NS as u32]);
+        for v in &be.cdf {
+            w.write_all(&v.to_le_bytes()).unwrap();
+        }
+        put(&mut w, &[be.grp.len() as u32]);
+        w.write_all(&be.grp).unwrap();
+        let mut rows: Vec<(u32, u8)> = be.tab.iter().map(|(&k, &v)| (k, v)).collect();
+        rows.sort_unstable();
+        let mut buf: Vec<u8> = Vec::with_capacity(3 * rows.len());
+        for (j, &(k, v)) in rows.iter().enumerate() {
+            put_var(&mut buf, if j == 0 { k } else { k - rows[j - 1].0 - 1 });
+            buf.push(v);
+        }
+        put(&mut w, &[rows.len() as u32, buf.len() as u32]);
+        w.write_all(&buf).unwrap();
+    }
 }
 
 /// LEB128 varint
@@ -6003,6 +6361,12 @@ fn train(args: &[String]) {
     let code_beta = r.u32() as f64 / 1000.0;
     let prune_reuse = r.u32() != 0;
     let prune_tail = r.u32() as f64 / 1e6;
+    let be_w = r.u32() as f64 / 1000.0;
+    let be_order = match r.u32() {
+        0 => 1,
+        o => o as usize,
+    };
+    assert!(be_order <= 8, "be_order is at most 8");
     assert!(code_len <= 1, "code_len is 0 or 1");
     // code_w without code_len: w x the unconditional bits on the 3-state DP (no pairwise terms)
     assert!(code_w == 0.0 || code_len == 1 || (mu2 == 0.0 && lamc == 0.0), "code_w_permille without code_len needs mu2 = lamc = 0");
@@ -6102,6 +6466,9 @@ fn train(args: &[String]) {
                   frag[0].len(), frag[1].len(), frag[2].len());
     }
 
+    // branching-entropy boundary statistics (be_permille), from the full training corpus
+    let be = if be_w > 0.0 { build_be(&full, be_order, be_w, &script, threads) } else { BoundEnt::default() };
+
     // initial dictionary: the alphabet as cores (folded), empty affixes
     let mut tabs = [Table::new(false), Table::new(true), Table::new(true)];
     for i in 0..n_sym as u32 {
@@ -6127,7 +6494,7 @@ fn train(args: &[String]) {
         sym: &sym, tabs, vcost: [0.0; NVAR_MAX], case, ca, canon: &canon, delta, lam, mu, h0, alnum_only, classes, allow: allow.clone(), mu2, tau,
         lamc, cn: Default::default(), ncore: Vec::new(),
         pmi: [HashMap::default(), HashMap::default()], tries: [empty(), empty(), empty()], nu, frag: &frag, pricing: &pricing,
-        cl: cl0,
+        cl: cl0, be: &be,
     };
     inc.rebuild();
     let st = parse_corpus(&inc, &train, threads, cl_on);
@@ -6193,7 +6560,7 @@ fn train(args: &[String]) {
             sym: &sym, tabs: inc.tabs.clone(), vcost: inc.vcost, case, ca, canon: &canon, delta, lam, mu, h0, alnum_only, classes, allow: allow.clone(), mu2, tau,
             lamc, cn: inc.cn.clone(), ncore: inc.ncore.clone(),
             pmi: inc.pmi.clone(), tries: [empty(), empty(), empty()], nu, frag: &frag, pricing: &pricing,
-            cl: inc.cl.clone(),
+            cl: inc.cl.clone(), be: &be,
         };
         prof("clone_dict", tq);
         let tq = Instant::now();
@@ -6545,6 +6912,7 @@ fn encode(args: &[String]) {
         tag = if m.pos + 4 <= m.buf.len() { m.u32() } else { 0 };
     }
     let mut cl = CodeLen::default();
+    let had_code = tag == CODE_MAGIC;
     if tag == CODE_MAGIC {
         cl.on = m.u32() == 1;
         cl.w = m.f64();
@@ -6576,10 +6944,37 @@ fn encode(args: &[String]) {
         cl.vb = codelen_vb(&cl.bo, &cl.pair[2], &vcost, nv);
         cl.index();
     }
+    if had_code {
+        tag = if m.pos + 4 <= m.buf.len() { m.u32() } else { 0 };
+    }
+    let mut be = BoundEnt::default();
+    if tag == BE_MAGIC {
+        be.w = m.f64();
+        be.order = m.u32() as usize;
+        be.med = [m.u32() as u8, m.u32() as u8];
+        be.ncls = m.u32() as usize;
+        let nq = m.u32() as usize;
+        assert_eq!(nq, BE_NS, "boundary percentile table");
+        be.cdf = (0..be.ncls * nq).map(|_| f32::from_le_bytes(m.take::<4>())).collect();
+        let ng = m.u32() as usize;
+        be.grp = m.buf[m.pos..m.pos + ng].to_vec();
+        m.pos += ng;
+        let (n, len) = (m.u32() as usize, m.u32() as usize);
+        let buf = &m.buf[m.pos..m.pos + len];
+        m.pos += len;
+        let (mut at, mut k) = (0usize, 0u32);
+        be.tab.reserve(n);
+        for j in 0..n {
+            let g = get_var(buf, &mut at);
+            k = if j == 0 { g } else { k + g + 1 };
+            be.tab.insert(k, buf[at]);
+            at += 1;
+        }
+    }
     let empty = Trie::empty;
     let no_frag: [HashMap<u64, f32, Fast>; 3] = Default::default();
     let no_pricing = Pricing::default();
-    let mut d = Dict { sym: &sym, tabs, vcost, case, ca, canon: &canon, delta, lam, mu, h0: 0.0, alnum_only: false, classes: false, allow: Default::default(), mu2, tau, pmi, lamc, cn, ncore, tries: [empty(), empty(), empty()], nu, frag: &no_frag, pricing: &no_pricing, cl };
+    let mut d = Dict { sym: &sym, tabs, vcost, case, ca, canon: &canon, delta, lam, mu, h0: 0.0, alnum_only: false, classes: false, allow: Default::default(), mu2, tau, pmi, lamc, cn, ncore, tries: [empty(), empty(), empty()], nu, frag: &no_frag, pricing: &no_pricing, cl, be: &be };
     d.rebuild();
     if ca {
         for k in 0..3 {

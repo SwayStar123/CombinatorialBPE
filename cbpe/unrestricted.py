@@ -38,6 +38,9 @@ from array import array
 import regex
 
 CHUNK = regex.compile(r"\s*\S+|\s+")
+# models trained without --hybrid saw whole paragraphs (split before blank lines), so tokens
+# may span spaces; they must be encoded the same way
+PARAGRAPH = regex.compile(r"(?=\n\n)")
 NONE = 0xFFFFFFFF
 NONE_BASE = 0xFFFFFFF0
 N_BYTES = 256
@@ -108,7 +111,9 @@ def _binary():
 
 
 class UnrestrictedBPE:
-    def __init__(self, model_path: str, alphabet: list[str]):
+    def __init__(self, model_path: str, alphabet: list[str], segmentation: str = "chunks"):
+        assert segmentation in ("chunks", "paragraphs"), segmentation
+        self.segmentation = segmentation
         self.model_path = model_path
         self.alphabet = list(alphabet)
         self.idx = {c: i for i, c in enumerate(self.alphabet)}
@@ -192,7 +197,7 @@ class UnrestrictedBPE:
         return out
 
     def encode(self, text: str) -> list[tuple[int, int, int, int]]:
-        chunks = CHUNK.findall(text)
+        chunks = CHUNK.findall(text) if self.segmentation == "chunks" else [s for s in PARAGRAPH.split(text) if s]
         uniq = list(dict.fromkeys(chunks))
         enc = dict(zip(uniq, self._encode_chunks(uniq))) if uniq else {}
         return [t for ch in chunks for t in enc[ch]]
@@ -210,6 +215,9 @@ class UnrestrictedBPE:
     # --------------------------------------------------------------------- io
     def save(self, path):
         with open(path, "w", encoding="utf-8") as f:
-            json.dump({"type": "unrestricted",
-                       "model": os.path.relpath(self.model_path, os.path.dirname(os.path.abspath(path))),
-                       "alphabet": self.alphabet}, f, ensure_ascii=False)
+            d = {"type": "unrestricted",
+                 "model": os.path.relpath(self.model_path, os.path.dirname(os.path.abspath(path))),
+                 "alphabet": self.alphabet}
+            if self.segmentation != "chunks":
+                d["segmentation"] = self.segmentation
+            json.dump(d, f, ensure_ascii=False)
