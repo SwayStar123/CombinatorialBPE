@@ -1,5 +1,6 @@
 """Framework-free helpers shared by the PyTorch (lm.py) and JAX (jax_lm.py) LM experiments."""
 import json
+import math
 import os
 import subprocess
 import sys
@@ -47,3 +48,27 @@ def encode_file(tok_path, text_path, max_chars=None, cache=CACHE, mmap_mode=None
         with open(meta, "w") as f:
             json.dump({"n_bytes": n_bytes, "text": os.path.basename(text_path), "max_chars": max_chars}, f)
     return np.load(out, mmap_mode=mmap_mode), n_bytes
+
+
+def lr_at(step, lr, warmup, steps):
+    """Learning rate at a step: linear warmup, cosine decay, floored at 10% of the (warmed-up) peak."""
+    warm = min(1, (step + 1) / warmup)
+    return max(lr * warm * 0.5 * (1 + math.cos(math.pi * step / steps)), lr * 0.1 * warm)
+
+
+def window_order(n_windows, need, seed, how="auto"):
+    """Order of training windows: random permutations (epochs) of the window indices, concatenated
+    until `need` are drawn. how = "torch" (a seeded CPU torch.Generator, lm.py's order), "numpy",
+    or "auto" (torch if importable). Returns (int64 indices, how)."""
+    reps = -(-need // n_windows)
+    if how in ("auto", "torch"):
+        try:
+            import torch
+        except ImportError:
+            if how == "torch":
+                raise
+        else:
+            g = torch.Generator().manual_seed(seed)
+            return torch.cat([torch.randperm(n_windows, generator=g) for _ in range(reps)])[:need].numpy(), "torch"
+    rng = np.random.default_rng(seed)
+    return np.concatenate([rng.permutation(n_windows) for _ in range(reps)])[:need], "numpy"

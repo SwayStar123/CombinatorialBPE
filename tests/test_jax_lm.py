@@ -6,7 +6,7 @@ Identical initial weights (lm.py's state_dict converted to JAX params) and ident
   * a few optimiser steps (AdamW and Muon, incl. schedule and clipping) track PyTorch;
   * sharded execution on 4 fake CPU devices (data / fsdp / tensor meshes) matches one device.
 """
-import math
+import dataclasses
 import os
 import subprocess
 import sys
@@ -63,9 +63,10 @@ def test_forward_fp32(sizes, arch, head, order):
     nll, parts = jax.jit(lambda p, w: jax_lm.forward(p, w, cfg))(params, jnp.asarray(w))
     assert abs(float(nll) - ref) / ref < 2e-6, (float(nll), ref)
     np.testing.assert_allclose([float(p) for p in parts], ref_parts, rtol=2e-6)
-    # chunked and unchunked cross-entropy are the same function
-    cfg0 = jax_lm.Config(**{**cfg.__dict__, "ce_chunk": 0})
-    assert abs(float(jax_lm.forward(params, jnp.asarray(w), cfg0)[0]) - float(nll)) / ref < 1e-6
+    # chunked and unchunked cross-entropy are the same function (12 does not divide CTX: remainder chunk)
+    for chunk in (0, 12):
+        cfg_c = jax_lm.Config(**{**cfg.__dict__, "ce_chunk": chunk})
+        assert abs(float(jax_lm.forward(params, jnp.asarray(w), cfg_c)[0]) - float(nll)) / ref < 1e-6
 
 
 @pytest.mark.parametrize("sizes,arch", [(FACTORED, "modern"), (STANDARD, "gpt2")])
@@ -92,10 +93,9 @@ def torch_train(model, opt_name, batches, args):
                                   lr=args.lr, betas=(0.9, 0.95))]
     losses = []
     for step, w in enumerate(batches):
-        lr = args.lr * min(1, (step + 1) / args.warmup) * 0.5 * (1 + math.cos(math.pi * step / args.steps))
         for opt in opts:
             for grp in opt.param_groups:
-                grp["lr"] = max(lr, args.lr * 0.1 * min(1, (step + 1) / args.warmup))
+                grp["lr"] = lm.lr_at(step, args.lr, args.warmup, args.steps)
             opt.zero_grad(set_to_none=True)
         w = torch.from_numpy(w).long()
         nll, _ = model(w[:, :-1], w[:, 1:])
@@ -141,7 +141,7 @@ def test_optimizer_steps(opt_name, sizes, arch, monkeypatch):
     step_fn = jax.jit(jax_lm.make_train_step(cfg, groups, B * CTX))
     losses = []
     for s, w in enumerate(batches):
-        params, state, m = step_fn(params, state, jnp.asarray(w)[None], jnp.float32(jax_lm.lr_at(s, args)))
+        params, state, m = step_fn(params, state, jnp.asarray(w)[None], jnp.float32(jax_lm.lr_at(s, args.lr, args.warmup, args.steps)))
         losses.append(float(m["loss"]))
     np.testing.assert_allclose(losses, ref_losses, rtol=tol_loss)
     ref = {n: v.numpy() for n, v in model.state_dict().items()}
@@ -172,6 +172,21 @@ def test_window_order_matches_lm():
     assert how == "torch" and (got == ref.numpy()).all()
 
 
+def test_splash_attention_matches_xla():
+    """The Pallas splash kernel (interpreted on CPU) gives the XLA attention's loss and gradients."""
+    ctx = 128  # splash works on blocks of 128 positions
+    cfg = jax_lm.Config(tuple(FACTORED), D, L, H, ctx, "chain", 1.0, (1, 2, 0, 3), "modern", "float32", "none", 32)
+    params = jax_lm.init_params(jax.random.PRNGKey(0), cfg)
+    rng = np.random.default_rng(0)
+    w = jnp.asarray(np.stack([rng.integers(0, n, size=(2, ctx + 1)) for n in FACTORED], -1).astype(np.int32))
+    run = lambda c: jax.jit(jax.value_and_grad(lambda p: jax_lm.forward(p, w, c)[0]))(params)
+    (l_xla, g_xla), (l_spl, g_spl) = run(cfg), run(dataclasses.replace(cfg, attention="splash"))
+    assert abs(float(l_spl) - float(l_xla)) < 1e-5 * float(l_xla)
+    for n in g_xla:
+        err = float(jnp.abs(g_spl[n] - g_xla[n]).max()) / (float(jnp.abs(g_xla[n]).max()) + 1e-12)
+        assert err < 1e-4, (n, err)
+
+
 SHARDED = textwrap.dedent("""
     import os, sys
     sys.path.insert(0, sys.argv[1])
@@ -182,35 +197,51 @@ SHARDED = textwrap.dedent("""
     jax_lm.MUON_NS_DTYPE = jnp.float32  # compare sharded vs unsharded without bf16 rounding noise
     rng = np.random.default_rng(0)
     sizes = (5, 11, 96, 13)
-    w = np.stack([rng.integers(0, n, size=(8, 33)) for n in sizes], -1).astype(np.int32)
-    out = {}
+
+    def two_steps(arch, fsdp, tensor, ctx, attention):
+        mesh = None if fsdp == 0 else jax_lm.make_mesh(fsdp, tensor)
+        cfg = jax_lm.Config(sizes, 64, 2, 4, ctx, "chain", 1.0, (1, 2, 0, 3), arch, "float32", "full", 8, mesh,
+                            attention)
+        params = jax.jit(lambda k: jax_lm.init_params(k, cfg),
+                         out_shardings=jax_lm.param_shardings(cfg))(jax.random.PRNGKey(0))
+        groups = jax_lm.opt_groups(params, "muon")
+        state = jax_lm.opt_init(params, groups)
+        sh = None if mesh is None else NamedSharding(mesh, P(None, jax_lm.BATCH, None, None))
+        w = np.stack([rng.integers(0, n, size=(8, ctx + 1)) for n in sizes], -1).astype(np.int32)
+        wb, _ = jax_lm.make_global_batch(w.reshape(-1, 4), np.arange(8) * (ctx + 1), ctx, (1, 8, ctx + 1, 4), sh)
+        assert (np.asarray(wb)[0] == w).all()
+        step = jax.jit(jax_lm.make_train_step(cfg, groups, 8 * ctx))
+        for _ in range(2):
+            params, state, m = step(params, state, wb, jnp.float32(1e-2))
+        return float(m["loss"]), {n: np.asarray(v) for n, v in params.items()}
+
+    def same(got, ref, what):
+        assert abs(got[0] - ref[0]) < 1e-5 * abs(ref[0]), (what, got[0], ref[0])
+        diff = max(np.abs(got[1][n] - ref[1][n]).max() for n in ref[1])
+        assert diff < 1e-5, (what, diff)
+        print(what, got[0], diff)
+
     for arch in ("gpt2", "modern"):
-        for fsdp, tensor in ((0, 0), (1, 1), (2, 1), (4, 1), (1, 2), (2, 2)):
-            mesh = None if fsdp == 0 else jax_lm.make_mesh(fsdp, tensor)
-            cfg = jax_lm.Config(sizes, 64, 2, 4, 32, "chain", 1.0, (1, 2, 0, 3), arch, "float32", "full", 8, mesh)
-            params = jax.jit(lambda k: jax_lm.init_params(k, cfg),
-                             out_shardings=jax_lm.param_shardings(cfg))(jax.random.PRNGKey(0))
-            groups = jax_lm.opt_groups(params, "muon")
-            state = jax_lm.opt_init(params, groups)
-            sh = None if mesh is None else NamedSharding(mesh, P(None, jax_lm.BATCH, None, None))
-            data = w.reshape(-1, 4)  # windows of 33 rows: row b*33 .. b*33+32
-            wb, _ = jax_lm.make_global_batch(data, np.arange(8) * 33, 32, (1, 8, 33, 4), sh)
-            assert (np.asarray(wb)[0] == w).all()
-            step = jax.jit(jax_lm.make_train_step(cfg, groups, 8 * 32))
-            params, state, m = step(params, state, wb, jnp.float32(1e-2))
-            params, state, m = step(params, state, wb, jnp.float32(1e-2))
-            got = (float(m["loss"]), {n: np.asarray(v) for n, v in params.items()})
-            ref = out.setdefault(arch, got)
-            assert abs(got[0] - ref[0]) < 1e-5 * abs(ref[0]), (arch, fsdp, tensor, got[0], ref[0])
-            diff = max(np.abs(got[1][n] - ref[1][n]).max() for n in ref[1])
-            assert diff < 1e-5, (arch, fsdp, tensor, diff)
-            print(arch, fsdp, tensor, got[0], diff)
+        rng = np.random.default_rng(0)
+        ref = two_steps(arch, 0, 0, 32, "xla")
+        for fsdp, tensor in ((1, 1), (2, 1), (4, 1), (1, 2), (2, 2)):
+            rng = np.random.default_rng(0)
+            same(two_steps(arch, fsdp, tensor, 32, "xla"), ref, (arch, fsdp, tensor))
+    # splash attention under shard_map (batch over data x fsdp, heads over tensor)
+    rng = np.random.default_rng(1)
+    ref = two_steps("modern", 0, 0, 128, "xla")
+    for fsdp, tensor in ((4, 1), (2, 2)):
+        rng = np.random.default_rng(1)
+        same(two_steps("modern", fsdp, tensor, 128, "splash"), ref, ("splash", fsdp, tensor))
     print("OK")
 """)
 
 
 def test_sharded_matches_single_device():
+    """Every mesh layout (and splash attention under it) trains exactly like one device, and XLA never
+    falls back to replicating a tensor to reshard it."""
     env = dict(os.environ, JAX_PLATFORMS="cpu", XLA_FLAGS="--xla_force_host_platform_device_count=4")
     r = subprocess.run([sys.executable, "-c", SHARDED, os.path.join(ROOT, "experiments")], env=env,
-                       capture_output=True, text=True, timeout=900)
+                       capture_output=True, text=True, timeout=1800)
     assert r.returncode == 0 and "OK" in r.stdout, r.stdout[-3000:] + r.stderr[-3000:]
+    assert "Involuntary full rematerialization" not in r.stderr, r.stderr[-3000:]

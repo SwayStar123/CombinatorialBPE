@@ -9,9 +9,10 @@ T=results/tokenizers
 D=data/curated
 COMB=mix_131072_dict_search_hybrid_caff_d320
 STD=mix_131072_bpe_gpt2_d320
+# --accum 4: 128k-row output layers at batch 32 spill out of a 24 GB GPU without it
 COMMON="--arch modern --opt muon --train_text $D/mix_lm3x.txt --val_text $D/mix.test.txt --accum 4"
 HEAD_COMB="--head chain --order 1,2,0,3"
-export DS_THREADS=${DS_THREADS:-2}
+export DS_THREADS=${DS_THREADS:-2}  # threads per unrestricted-encoder process (encode.py runs WORKERS of them)
 
 echo "== sweep $(date)"
 for lr in 4e-3 8e-3; do

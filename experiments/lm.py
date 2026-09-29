@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from cbpe import CombinatorialBPE, load  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lm_common import CACHE, ROOT, encode_file, rel  # noqa: E402,F401  (shared with jax_lm.py)
+from lm_common import ROOT, encode_file, lr_at, rel, window_order  # noqa: E402
 
 
 # ------------------------------------------------------------------- model
@@ -274,10 +274,9 @@ def train(tok_path, args):
     assert args.allow_repeat or args.steps * tokens_per_step <= len(data), "would repeat data (see --allow_repeat)"
     # a random permutation of non-overlapping windows; with --allow_repeat, further independent
     # permutations (epochs) follow once the data runs out, so compute can be matched
-    g = torch.Generator().manual_seed(args.seed)
     n_windows = (len(data) - 1) // args.ctx
     need = args.steps * args.bs
-    order = torch.cat([torch.randperm(n_windows, generator=g) for _ in range(-(-need // n_windows))])[:need] * args.ctx
+    order = torch.from_numpy(window_order(n_windows, need, args.seed, "torch")[0]) * args.ctx
     if need > n_windows:
         print(f"  --allow_repeat: {need / n_windows:.2f} epochs over the training data", flush=True)
 
@@ -297,10 +296,10 @@ def train(tok_path, args):
                   f"({time.time() - t0:.0f}s)", flush=True)
         if step == args.steps:
             break
-        lr = args.lr * min(1, (step + 1) / args.warmup) * 0.5 * (1 + math.cos(math.pi * step / args.steps))
+        lr = lr_at(step, args.lr, args.warmup, args.steps)
         for opt in opts:
             for grp in opt.param_groups:
-                grp["lr"] = max(lr, args.lr * 0.1 * min(1, (step + 1) / args.warmup))
+                grp["lr"] = lr
         idx = order[step * args.bs:(step + 1) * args.bs]
         for opt in opts:
             opt.zero_grad(set_to_none=True)
