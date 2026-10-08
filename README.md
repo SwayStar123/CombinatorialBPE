@@ -307,6 +307,19 @@ experiments/train_bpe_big.py     standard BPE on the same multi-GB tokenizer tex
 
 </details>
 
+## Citation
+
+If you use CombinatorialBPE in your research, please cite:
+
+```bibtex
+@software{combinatorialbpe,
+  author = {Swayam Bhanded},
+  title = {CombinatorialBPE},
+  year = {2026},
+  url = {https://github.com/SwayStar123/CombinatorialBPE}
+}
+```
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The Traditional/Simplified tables in `cbpe/data/han_st.json` are
