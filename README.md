@@ -312,8 +312,8 @@ experiments/train_bpe_big.py     standard BPE on the same multi-GB tokenizer tex
 If you use CombinatorialBPE in your research, please cite:
 
 ```bibtex
-@software{combinatorialbpe,
-  author = {Swayam Bhanded},
+@software{bhanded2026combinatorialbpe,
+  author = {Bhanded, Swayam},
   title = {CombinatorialBPE},
   year = {2026},
   url = {https://github.com/SwayStar123/CombinatorialBPE}
