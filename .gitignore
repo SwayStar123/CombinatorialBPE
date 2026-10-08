@@ -28,3 +28,5 @@ native/*/target_dev/
 # third-party tokenizer files for comparisons (downloaded), and the bench run log
 results/frontier_tok/
 results/unrestricted.json
+
+.env
