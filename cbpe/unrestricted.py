@@ -3,7 +3,8 @@
 Prefixes, cores and suffixes are arbitrary strings; only the core carries the variation. Text is
 split into whitespace chunks (leading whitespace attached) and every chunk is segmented by the
 exact minimum-cost DP in the Rust binary, so this class needs `native/dict_search` built
-(`cargo build --release`).
+(`cargo build --release`); without the binary, case_affixes models without pair terms (the published
+Qwen3 tokenizer) are encoded by the pure-Python port in unrestricted_py.py instead (identical, slower).
 
 Token layout matches CombinatorialBPE: (variation, prefix, core, suffix), where core ids 0-255 are
 the UTF-8 byte-fallback rows and learned cores start at 256; prefix/suffix 0 is the empty string.
@@ -28,6 +29,7 @@ The tokenizer file is a small JSON: {"type": "unrestricted", "model": <.bin next
 """
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import struct
@@ -110,10 +112,18 @@ def _binary():
     raise FileNotFoundError("build native/dict_search first: cargo build --release")
 
 
+def _has_binary():
+    try:
+        return bool(_binary())
+    except FileNotFoundError:
+        return False
+
+
 class UnrestrictedBPE:
     def __init__(self, model_path: str, alphabet: list[str], segmentation: str = "chunks"):
         assert segmentation in ("chunks", "paragraphs"), segmentation
         self.segmentation = segmentation
+        self._py = None  # the pure-Python encoder, built on first use
         self.model_path = model_path
         self.alphabet = list(alphabet)
         self.idx = {c: i for i, c in enumerate(self.alphabet)}
@@ -165,7 +175,8 @@ class UnrestrictedBPE:
             return self._str(w[:len(ps)]), self._str(w[len(ps):len(ps) + len(cs)]), self._str(w[len(ps) + len(cs):])
         return self.prefixes[p], self._written(c, v), self.suffixes[s]
 
-    def _encode_chunks(self, chunks: list[str]) -> list[list[tuple[int, int, int, int]]]:
+    def _raw_binary(self, chunks: list[str]) -> list[list[tuple[int, int, int, int]]]:
+        """per chunk, the (variation, prefix, core, suffix) rows of the Rust encoder (core NONE: a byte-fallback char)"""
         lens = array("I", map(len, chunks))
         ids = array("I")
         for s in chunks:
@@ -180,13 +191,33 @@ class UnrestrictedBPE:
             with open(op, "rb") as f:
                 data = f.read()
         out, pos = [], 0
-        for chunk in chunks:
+        for _ in chunks:
             n = struct.unpack_from("<I", data, pos)[0]
             vals = struct.unpack_from(f"<{4 * n}I", data, pos + 4)
             pos += 4 + 16 * n
+            out.append([vals[i:i + 4] for i in range(0, 4 * n, 4)])
+        return out
+
+    def _raw_python(self, chunks: list[str]) -> list[list[tuple[int, int, int, int]]]:
+        """the same rows from the pure-Python encoder (cbpe/unrestricted_py.py)"""
+        if self._py is None:
+            # (importlib, not "from .unrestricted_py import": Hugging Face's remote-code loader scans for relative imports)
+            self._py = importlib.import_module(".unrestricted_py", __package__).PyEncoder(self.model_path)
+        return [self._py.parse([self.idx[c] if c in self.idx else NONE_BASE + len(c.encode("utf-8")) for c in s])
+                for s in chunks]
+
+    def _encode_chunks(self, chunks: list[str]) -> list[list[tuple[int, int, int, int]]]:
+        """The Rust binary if there is one (build native/dict_search, or set DS_BIN); else, for the models
+        it supports, the pure-Python port (slower, identical output). CBPE_ENCODER=python / rust forces one."""
+        mode = os.environ.get("CBPE_ENCODER", "")
+        if mode == "python" or (mode != "rust" and not _has_binary()):
+            raw = self._raw_python(chunks)
+        else:
+            raw = self._raw_binary(chunks)
+        out = []
+        for chunk, rows in zip(chunks, raw):
             toks, at = [], 0
-            for i in range(0, 4 * n, 4):
-                v, p, c, s = vals[i:i + 4]
+            for v, p, c, s in rows:
                 if c == NONE:  # byte fallback: one token per UTF-8 byte of this char
                     toks.extend((0, 0, b, 0) for b in chunk[at].encode("utf-8"))
                     at += 1

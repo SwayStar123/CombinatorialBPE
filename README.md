@@ -298,6 +298,10 @@ experiments/report.py            results/REPORT.md and plots
 native/bpe_train/                optional Rust BPE merge loop (identical output to the Python trainer)
 native/dict_search/              unrestricted factored trainer + exact encoder (Rust)
 cbpe/unrestricted.py             loader / encoder / decoder for unrestricted models
+cbpe/qwen3.py                    PyTorch inference for Qwen3-1.7B converted to an unrestricted tokenizer (docs/qwen3.md)
+cbpe/unrestricted_py.py          pure-Python encoder for unrestricted models (same output as the Rust binary)
+hf_remote/                       AutoModel / AutoTokenizer (trust_remote_code) files of the Hugging Face repository
+scripts/make_hf_repo.py          assembles that repository from weights + tokenizer
 scripts/download_curated.py      curated data: FineWeb-Edu, FineWeb-2, github-code-clean (--more: more text)
 experiments/bench_dictsearch.py  trains an unrestricted tokenizer and reports compression per source
 experiments/worst_cases.py       worst splits, least productive affixes, least used cores
@@ -306,6 +310,13 @@ experiments/train_bpe_big.py     standard BPE on the same multi-GB tokenizer tex
 ```
 
 </details>
+
+## A pretrained LLM on this tokenizer
+
+Qwen3-1.7B-Base converted to a 131k unrestricted Combinatorial BPE vocabulary (about 1.6x fewer tokens
+per text, within a few percent of the original's bits per byte on a mixed 10-source test set):
+weights on [Hugging Face](https://huggingface.co/SwayStar123/Qwen3-1.7B-CBPE), how to run it in
+[docs/qwen3.md](docs/qwen3.md).
 
 ## Citation
 

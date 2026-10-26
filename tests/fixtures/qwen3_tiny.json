@@ -1,0 +1,1 @@
+{"model_type": "qwen3", "hidden_size": 64, "intermediate_size": 96, "num_hidden_layers": 2, "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 24, "rope_theta": 1000000.0, "rms_norm_eps": 1e-06, "tie_word_embeddings": true, "max_position_embeddings": 32, "attention_bias": false, "hidden_act": "silu", "cbpe": {"sizes": [4, 6, 40, 5], "order": [2, 1, 0, 3]}}
