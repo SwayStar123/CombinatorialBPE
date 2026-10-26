@@ -1,0 +1,11 @@
+# experiments/jax_lm.py on Cloud TPU VMs (see docs/tpu.md). Python >= 3.12 (jax 0.11 requirement).
+# Versions are the ones jax_lm.py was developed and CPU-tested with (jax/jaxlib 0.11.2, orbax 0.12.6);
+# jax[tpu] pulls the matching libtpu (0.0.48.*).
+-f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+jax[tpu]==0.11.2
+orbax-checkpoint==0.12.6
+numpy>=2.0
+regex            # cbpe (tokenizer loading / encode.py)
+# optional: CPU PyTorch only to reproduce lm.py's exact data order (torch.randperm); without it
+# jax_lm.py falls back to a numpy permutation (--data_order numpy):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu

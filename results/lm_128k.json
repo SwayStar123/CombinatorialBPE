@@ -1,0 +1,771 @@
+[
+ {
+  "tokenizer": "mix_131072_bpe_gpt2_d320.json",
+  "tag": "long_lr0.008",
+  "sizes": [
+   131072
+  ],
+  "params": 92415488,
+  "emb_params": 67108864,
+  "bytes_per_token": 4.610329836763262,
+  "curve": [
+   {
+    "step": 0,
+    "tokens": 0,
+    "bytes": 0.0,
+    "val_bpb": 3.6045344741613103,
+    "val_bpb_parts": [
+     3.6045344741613103
+    ]
+   },
+   {
+    "step": 1500,
+    "tokens": 24576000,
+    "bytes": 113303466.06829393,
+    "val_bpb": 1.5534868207633912,
+    "val_bpb_parts": [
+     1.5534868207633912
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.3877842988468894,
+     "val_mix_de.txt": 2.0763857327916764,
+     "val_mix_en.txt": 1.8352200929751523,
+     "val_mix_fr.txt": 1.9825211738547621,
+     "val_mix_go.txt": 1.1919421205834464,
+     "val_mix_hi.txt": 0.8795825723549762,
+     "val_mix_ja.txt": 1.5570878542076476,
+     "val_mix_java.txt": 0.9369137659663344,
+     "val_mix_javascript.txt": 1.2439245108668902,
+     "val_mix_python.txt": 1.2943300330921814,
+     "val_mix_zh.txt": 2.2162307315895307
+    }
+   },
+   {
+    "step": 3000,
+    "tokens": 49152000,
+    "bytes": 226606932.13658786,
+    "val_bpb": 1.4817570624291019,
+    "val_bpb_parts": [
+     1.4817570624291019
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.2934443984787427,
+     "val_mix_de.txt": 1.9859313006897876,
+     "val_mix_en.txt": 1.7490546426328155,
+     "val_mix_fr.txt": 1.9025626837364369,
+     "val_mix_go.txt": 1.082163657508175,
+     "val_mix_hi.txt": 0.8408759561799917,
+     "val_mix_ja.txt": 1.5068134794352686,
+     "val_mix_java.txt": 0.8641782493831338,
+     "val_mix_javascript.txt": 1.161749204651765,
+     "val_mix_python.txt": 1.207508715920302,
+     "val_mix_zh.txt": 2.1298277943473103
+    }
+   },
+   {
+    "step": 4500,
+    "tokens": 73728000,
+    "bytes": 339910398.2048818,
+    "val_bpb": 1.4491769573604334,
+    "val_bpb_parts": [
+     1.4491769573604334
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.2871347541577443,
+     "val_mix_de.txt": 1.9395739711542404,
+     "val_mix_en.txt": 1.7239977473308778,
+     "val_mix_fr.txt": 1.8573560605772867,
+     "val_mix_go.txt": 1.0411463214136483,
+     "val_mix_hi.txt": 0.8234181705622715,
+     "val_mix_ja.txt": 1.4729054054679411,
+     "val_mix_java.txt": 0.8297673243445064,
+     "val_mix_javascript.txt": 1.1107619170459864,
+     "val_mix_python.txt": 1.1728288565863518,
+     "val_mix_zh.txt": 2.088681517909206
+    }
+   },
+   {
+    "step": 6000,
+    "tokens": 98304000,
+    "bytes": 453213864.2731757,
+    "val_bpb": 1.4194797204076108,
+    "val_bpb_parts": [
+     1.4194797204076108
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.2272763019297308,
+     "val_mix_de.txt": 1.9021559431948152,
+     "val_mix_en.txt": 1.6789982968017731,
+     "val_mix_fr.txt": 1.8262813215172193,
+     "val_mix_go.txt": 1.016090072616466,
+     "val_mix_hi.txt": 0.8096487963304748,
+     "val_mix_ja.txt": 1.4519818654846246,
+     "val_mix_java.txt": 0.8053556643002249,
+     "val_mix_javascript.txt": 1.0687995118994968,
+     "val_mix_python.txt": 1.1295294220058705,
+     "val_mix_zh.txt": 2.0646015681885284
+    }
+   },
+   {
+    "step": 7500,
+    "tokens": 122880000,
+    "bytes": 566517330.3414696,
+    "val_bpb": 1.3932200304555475,
+    "val_bpb_parts": [
+     1.3932200304555475
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.2115811454014722,
+     "val_mix_de.txt": 1.8654859249764912,
+     "val_mix_en.txt": 1.6506133729998986,
+     "val_mix_fr.txt": 1.809577158900804,
+     "val_mix_go.txt": 0.9795619800831883,
+     "val_mix_hi.txt": 0.7916278149083307,
+     "val_mix_ja.txt": 1.4327342235845597,
+     "val_mix_java.txt": 0.777935029640857,
+     "val_mix_javascript.txt": 1.032094899725496,
+     "val_mix_python.txt": 1.0979575768928285,
+     "val_mix_zh.txt": 2.027365701114444
+    }
+   },
+   {
+    "step": 9000,
+    "tokens": 147456000,
+    "bytes": 679820796.4097636,
+    "val_bpb": 1.362877798727828,
+    "val_bpb_parts": [
+     1.362877798727828
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.1770368759227,
+     "val_mix_de.txt": 1.832837724205076,
+     "val_mix_en.txt": 1.6332901744150141,
+     "val_mix_fr.txt": 1.7618743623276418,
+     "val_mix_go.txt": 0.9413093794639581,
+     "val_mix_hi.txt": 0.7847475735418563,
+     "val_mix_ja.txt": 1.403765875889638,
+     "val_mix_java.txt": 0.7448171045767921,
+     "val_mix_javascript.txt": 0.9884911107101207,
+     "val_mix_python.txt": 1.0693973628127178,
+     "val_mix_zh.txt": 1.9869537336966943
+    }
+   },
+   {
+    "step": 10500,
+    "tokens": 172032000,
+    "bytes": 793124262.4780575,
+    "val_bpb": 1.3352889079278323,
+    "val_bpb_parts": [
+     1.3352889079278323
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.14817786559227,
+     "val_mix_de.txt": 1.8014603145809578,
+     "val_mix_en.txt": 1.5876697356808191,
+     "val_mix_fr.txt": 1.7108853130084716,
+     "val_mix_go.txt": 0.9054879804324005,
+     "val_mix_hi.txt": 0.7715130892449016,
+     "val_mix_ja.txt": 1.3816912309491105,
+     "val_mix_java.txt": 0.7178655101874457,
+     "val_mix_javascript.txt": 0.955373350088816,
+     "val_mix_python.txt": 1.0294554268337799,
+     "val_mix_zh.txt": 1.9639512925135951
+    }
+   },
+   {
+    "step": 12000,
+    "tokens": 196608000,
+    "bytes": 906427728.5463514,
+    "val_bpb": 1.3003261248505007,
+    "val_bpb_parts": [
+     1.3003261248505007
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.1106497353054678,
+     "val_mix_de.txt": 1.7426463222758013,
+     "val_mix_en.txt": 1.5488377932464397,
+     "val_mix_fr.txt": 1.6775408527727935,
+     "val_mix_go.txt": 0.8766788735120242,
+     "val_mix_hi.txt": 0.7520473582602946,
+     "val_mix_ja.txt": 1.3527370837099981,
+     "val_mix_java.txt": 0.6955527140075378,
+     "val_mix_javascript.txt": 0.9024614096507921,
+     "val_mix_python.txt": 0.9905395830355717,
+     "val_mix_zh.txt": 1.9232995868110598
+    }
+   },
+   {
+    "step": 13500,
+    "tokens": 221184000,
+    "bytes": 1019731194.6146454,
+    "val_bpb": 1.29651238784524,
+    "val_bpb_parts": [
+     1.29651238784524
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.1018111413805873,
+     "val_mix_de.txt": 1.73801516156142,
+     "val_mix_en.txt": 1.5472388365826077,
+     "val_mix_fr.txt": 1.6771730331302492,
+     "val_mix_go.txt": 0.8711283947486708,
+     "val_mix_hi.txt": 0.7484593131584172,
+     "val_mix_ja.txt": 1.3521990985060495,
+     "val_mix_java.txt": 0.6860827745403629,
+     "val_mix_javascript.txt": 0.8930534696420678,
+     "val_mix_python.txt": 0.9927247092198398,
+     "val_mix_zh.txt": 1.9189536120408734
+    }
+   },
+   {
+    "step": 15000,
+    "tokens": 245760000,
+    "bytes": 1133034660.6829393,
+    "val_bpb": 1.2949038535433832,
+    "val_bpb_parts": [
+     1.2949038535433832
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.0704117459747817,
+     "val_mix_de.txt": 1.7320573861175774,
+     "val_mix_en.txt": 1.5484418424805373,
+     "val_mix_fr.txt": 1.680867524582315,
+     "val_mix_go.txt": 0.8718467341543223,
+     "val_mix_hi.txt": 0.7473564187739632,
+     "val_mix_ja.txt": 1.3531513087189166,
+     "val_mix_java.txt": 0.6733314453712332,
+     "val_mix_javascript.txt": 0.8916224477091096,
+     "val_mix_python.txt": 0.9946634739539543,
+     "val_mix_zh.txt": 1.9259409235779967
+    }
+   }
+  ],
+  "train_s": 5738.1105790138245,
+  "final_by_source": {
+   "val_mix_cpp.txt": {
+    "val_bpb": 1.0704117459747817,
+    "val_bpb_parts": [
+     1.0704117459747817
+    ]
+   },
+   "val_mix_de.txt": {
+    "val_bpb": 1.7320573861175774,
+    "val_bpb_parts": [
+     1.7320573861175774
+    ]
+   },
+   "val_mix_en.txt": {
+    "val_bpb": 1.5484418424805373,
+    "val_bpb_parts": [
+     1.5484418424805373
+    ]
+   },
+   "val_mix_fr.txt": {
+    "val_bpb": 1.680867524582315,
+    "val_bpb_parts": [
+     1.680867524582315
+    ]
+   },
+   "val_mix_go.txt": {
+    "val_bpb": 0.8718467341543223,
+    "val_bpb_parts": [
+     0.8718467341543223
+    ]
+   },
+   "val_mix_hi.txt": {
+    "val_bpb": 0.7473564187739632,
+    "val_bpb_parts": [
+     0.7473564187739632
+    ]
+   },
+   "val_mix_ja.txt": {
+    "val_bpb": 1.3531513087189166,
+    "val_bpb_parts": [
+     1.3531513087189166
+    ]
+   },
+   "val_mix_java.txt": {
+    "val_bpb": 0.6733314453712332,
+    "val_bpb_parts": [
+     0.6733314453712332
+    ]
+   },
+   "val_mix_javascript.txt": {
+    "val_bpb": 0.8916224477091096,
+    "val_bpb_parts": [
+     0.8916224477091096
+    ]
+   },
+   "val_mix_python.txt": {
+    "val_bpb": 0.9946634739539543,
+    "val_bpb_parts": [
+     0.9946634739539543
+    ]
+   },
+   "val_mix_zh.txt": {
+    "val_bpb": 1.9259409235779967,
+    "val_bpb_parts": [
+     1.9259409235779967
+    ]
+   }
+  },
+  "args": {
+   "tokenizers": [
+    "results/tokenizers/mix_131072_bpe_gpt2_d320.json"
+   ],
+   "train_text": "data/curated/mix_lm3x.txt",
+   "val_text": "data/curated/mix.test.txt",
+   "val_chars": 2000000,
+   "steps": 15000,
+   "allow_repeat": false,
+   "bs": 32,
+   "accum": 4,
+   "ctx": 512,
+   "d": 512,
+   "layers": 8,
+   "heads": 8,
+   "lr": 0.008,
+   "arch": "modern",
+   "opt": "muon",
+   "warmup": 200,
+   "eval_every": 1500,
+   "seed": 0,
+   "head": "linear",
+   "head_hidden": 1.0,
+   "order": "2,1,0,3",
+   "tag": "long_lr0.008",
+   "out": "results/lm_128k.json",
+   "extra_val": [
+    "val_mix_cpp.txt",
+    "val_mix_de.txt",
+    "val_mix_en.txt",
+    "val_mix_fr.txt",
+    "val_mix_go.txt",
+    "val_mix_hi.txt",
+    "val_mix_ja.txt",
+    "val_mix_java.txt",
+    "val_mix_javascript.txt",
+    "val_mix_python.txt",
+    "val_mix_zh.txt"
+   ]
+  }
+ },
+ {
+  "tokenizer": "mix_131072_dict_search_hybrid_caff_d320.json",
+  "tag": "long_lr0.008",
+  "sizes": [
+   8,
+   22898,
+   82742,
+   24880
+  ],
+  "params": 94505472,
+  "emb_params": 66830336,
+  "bytes_per_token": 9.226783551363399,
+  "curve": [
+   {
+    "step": 0,
+    "tokens": 0,
+    "bytes": 0.0,
+    "val_bpb": 4.838456195916554,
+    "val_bpb_parts": [
+     0.20048903408237728,
+     1.4628890732073623,
+     1.7729155880682343,
+     1.4021625035793137
+    ]
+   },
+   {
+    "step": 1500,
+    "tokens": 24576000,
+    "bytes": 226757432.55830687,
+    "val_bpb": 1.6101655907765313,
+    "val_bpb_parts": [
+     0.025010783554190324,
+     0.3738804060951966,
+     0.9159997111188153,
+     0.2952746775459529
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.6206160008921326,
+     "val_mix_de.txt": 1.9400488492661738,
+     "val_mix_en.txt": 1.745794662099614,
+     "val_mix_fr.txt": 1.8725617890087027,
+     "val_mix_go.txt": 1.3614795553971677,
+     "val_mix_hi.txt": 0.8260348141194886,
+     "val_mix_ja.txt": 1.6620251122367125,
+     "val_mix_java.txt": 1.0451206794277612,
+     "val_mix_javascript.txt": 1.3832317578769937,
+     "val_mix_python.txt": 1.482725079488002,
+     "val_mix_zh.txt": 2.3476764247015365
+    }
+   },
+   {
+    "step": 3000,
+    "tokens": 49152000,
+    "bytes": 453514865.11661375,
+    "val_bpb": 1.5178017626473677,
+    "val_bpb_parts": [
+     0.022124791743796782,
+     0.35275899206770867,
+     0.8658389271569128,
+     0.27707904395613553
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.5046082827657636,
+     "val_mix_de.txt": 1.829541289701668,
+     "val_mix_en.txt": 1.6512973935044974,
+     "val_mix_fr.txt": 1.7721888829306192,
+     "val_mix_go.txt": 1.232513425849355,
+     "val_mix_hi.txt": 0.7838927931883828,
+     "val_mix_ja.txt": 1.5960106368940408,
+     "val_mix_java.txt": 0.9398099676475864,
+     "val_mix_javascript.txt": 1.2462322505430006,
+     "val_mix_python.txt": 1.3498845739858016,
+     "val_mix_zh.txt": 2.24219430000159
+    }
+   },
+   {
+    "step": 4500,
+    "tokens": 73728000,
+    "bytes": 680272297.6749207,
+    "val_bpb": 1.4683913318162862,
+    "val_bpb_parts": [
+     0.020961562805870828,
+     0.34316238892075557,
+     0.8377545571615951,
+     0.26651281021453926
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.4073366137899435,
+     "val_mix_de.txt": 1.7728205227036835,
+     "val_mix_en.txt": 1.6152647575475403,
+     "val_mix_fr.txt": 1.7169018651765726,
+     "val_mix_go.txt": 1.1513649483177864,
+     "val_mix_hi.txt": 0.7620003989377695,
+     "val_mix_ja.txt": 1.5558615119070267,
+     "val_mix_java.txt": 0.8855275442299061,
+     "val_mix_javascript.txt": 1.1746962838054622,
+     "val_mix_python.txt": 1.2899853799104664,
+     "val_mix_zh.txt": 2.195129555862983
+    }
+   },
+   {
+    "step": 6000,
+    "tokens": 98304000,
+    "bytes": 907029730.2332275,
+    "val_bpb": 1.4400754728351892,
+    "val_bpb_parts": [
+     0.020567651878718816,
+     0.33605586951951305,
+     0.822822916926741,
+     0.2606290382079311
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.4040102831545709,
+     "val_mix_de.txt": 1.7454046776717704,
+     "val_mix_en.txt": 1.5755465592109295,
+     "val_mix_fr.txt": 1.7104722217903516,
+     "val_mix_go.txt": 1.1128040345880688,
+     "val_mix_hi.txt": 0.7459486780001507,
+     "val_mix_ja.txt": 1.5286104624189525,
+     "val_mix_java.txt": 0.8617884197073153,
+     "val_mix_javascript.txt": 1.116788667394361,
+     "val_mix_python.txt": 1.2373709529562147,
+     "val_mix_zh.txt": 2.158317003003859
+    }
+   },
+   {
+    "step": 7500,
+    "tokens": 122880000,
+    "bytes": 1133787162.7915344,
+    "val_bpb": 1.408787564991456,
+    "val_bpb_parts": [
+     0.01943302919141683,
+     0.3300452748505656,
+     0.804120451631734,
+     0.25518881044762254
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.3562244515189115,
+     "val_mix_de.txt": 1.7100201553595173,
+     "val_mix_en.txt": 1.5448953432921022,
+     "val_mix_fr.txt": 1.6627435658651888,
+     "val_mix_go.txt": 1.0701520825620268,
+     "val_mix_hi.txt": 0.7335410902758006,
+     "val_mix_ja.txt": 1.5002901998640967,
+     "val_mix_java.txt": 0.8233265270643773,
+     "val_mix_javascript.txt": 1.0917196224973515,
+     "val_mix_python.txt": 1.1939857641238487,
+     "val_mix_zh.txt": 2.123790625376935
+    }
+   },
+   {
+    "step": 9000,
+    "tokens": 147456000,
+    "bytes": 1360544595.3498414,
+    "val_bpb": 1.3773487619205782,
+    "val_bpb_parts": [
+     0.018848685909033262,
+     0.32238204192975517,
+     0.7893043386931169,
+     0.24681369104405487
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.3295855969054617,
+     "val_mix_de.txt": 1.6747327141791537,
+     "val_mix_en.txt": 1.5142183869467534,
+     "val_mix_fr.txt": 1.633065508938067,
+     "val_mix_go.txt": 1.0164581802337327,
+     "val_mix_hi.txt": 0.714495507935639,
+     "val_mix_ja.txt": 1.4747952106510822,
+     "val_mix_java.txt": 0.7933438881268654,
+     "val_mix_javascript.txt": 1.0461474757518343,
+     "val_mix_python.txt": 1.16752939852235,
+     "val_mix_zh.txt": 2.0799436821854522
+    }
+   },
+   {
+    "step": 10500,
+    "tokens": 172032000,
+    "bytes": 1587302027.9081483,
+    "val_bpb": 1.3391970952614194,
+    "val_bpb_parts": [
+     0.01802365818907368,
+     0.3146788630825764,
+     0.7664193605236734,
+     0.24007522235002732
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.2480839934470744,
+     "val_mix_de.txt": 1.6338463849576192,
+     "val_mix_en.txt": 1.4776780293591067,
+     "val_mix_fr.txt": 1.5894887921684957,
+     "val_mix_go.txt": 0.9719785768895897,
+     "val_mix_hi.txt": 0.7002997298749928,
+     "val_mix_ja.txt": 1.444647694636668,
+     "val_mix_java.txt": 0.7665699930776451,
+     "val_mix_javascript.txt": 0.9839401550507301,
+     "val_mix_python.txt": 1.1195855456080495,
+     "val_mix_zh.txt": 2.0417909357740505
+    }
+   },
+   {
+    "step": 12000,
+    "tokens": 196608000,
+    "bytes": 1814059460.466455,
+    "val_bpb": 1.304232635063012,
+    "val_bpb_parts": [
+     0.01732382908075388,
+     0.3063778630065225,
+     0.7473134104231566,
+     0.23321753274322585
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.1805470035567027,
+     "val_mix_de.txt": 1.594183243941805,
+     "val_mix_en.txt": 1.4461785605150161,
+     "val_mix_fr.txt": 1.5533895930200747,
+     "val_mix_go.txt": 0.9375441595853745,
+     "val_mix_hi.txt": 0.6903074056425044,
+     "val_mix_ja.txt": 1.416488055180035,
+     "val_mix_java.txt": 0.7272953535745725,
+     "val_mix_javascript.txt": 0.9184311326483939,
+     "val_mix_python.txt": 1.0829525252645298,
+     "val_mix_zh.txt": 2.0038071442757324
+    }
+   },
+   {
+    "step": 13500,
+    "tokens": 221184000,
+    "bytes": 2040816893.024762,
+    "val_bpb": 1.2985273800916037,
+    "val_bpb_parts": [
+     0.017235244569145918,
+     0.3050928962932024,
+     0.7441115504440531,
+     0.23208769365247936
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.1639223397635068,
+     "val_mix_de.txt": 1.5868012856310645,
+     "val_mix_en.txt": 1.438512508372925,
+     "val_mix_fr.txt": 1.5500193453323963,
+     "val_mix_go.txt": 0.9325664556506721,
+     "val_mix_hi.txt": 0.6868110670092913,
+     "val_mix_ja.txt": 1.4143815511517785,
+     "val_mix_java.txt": 0.7173926018264679,
+     "val_mix_javascript.txt": 0.9209845323241851,
+     "val_mix_python.txt": 1.067970326080981,
+     "val_mix_zh.txt": 1.9987445936973633
+    }
+   },
+   {
+    "step": 15000,
+    "tokens": 245760000,
+    "bytes": 2267574325.583069,
+    "val_bpb": 1.2965027789200265,
+    "val_bpb_parts": [
+     0.017265742672734882,
+     0.3047137492551188,
+     0.7424840474184186,
+     0.23203923809809268
+    ],
+    "by_source": {
+     "val_mix_cpp.txt": 1.1537441766724654,
+     "val_mix_de.txt": 1.587361870101701,
+     "val_mix_en.txt": 1.436302922504095,
+     "val_mix_fr.txt": 1.5471740532391534,
+     "val_mix_go.txt": 0.9288235697361281,
+     "val_mix_hi.txt": 0.6812598618548804,
+     "val_mix_ja.txt": 1.4113709041192732,
+     "val_mix_java.txt": 0.7100799381409896,
+     "val_mix_javascript.txt": 0.9167855362307742,
+     "val_mix_python.txt": 1.0660356649416394,
+     "val_mix_zh.txt": 2.006593399170482
+    }
+   }
+  ],
+  "train_s": 6055.399100065231,
+  "final_by_source": {
+   "val_mix_cpp.txt": {
+    "val_bpb": 1.1537441766724654,
+    "val_bpb_parts": [
+     0.03673305552386248,
+     0.2926658305160513,
+     0.6317104670867949,
+     0.1926348197176955
+    ]
+   },
+   "val_mix_de.txt": {
+    "val_bpb": 1.587361870101701,
+    "val_bpb_parts": [
+     0.02829156836468981,
+     0.2925023942038174,
+     1.0893792304672432,
+     0.1771886751813363
+    ]
+   },
+   "val_mix_en.txt": {
+    "val_bpb": 1.436302922504095,
+    "val_bpb_parts": [
+     0.018511689525014117,
+     0.1563854481814883,
+     1.128265625039069,
+     0.13314014512918906
+    ]
+   },
+   "val_mix_fr.txt": {
+    "val_bpb": 1.5471740532391534,
+    "val_bpb_parts": [
+     0.01863367803828324,
+     0.25140404780444664,
+     1.115042437821565,
+     0.16209389228127058
+    ]
+   },
+   "val_mix_go.txt": {
+    "val_bpb": 0.9288235697361281,
+    "val_bpb_parts": [
+     0.025553364242049566,
+     0.20665146902374928,
+     0.560958549740284,
+     0.13566017367574698
+    ]
+   },
+   "val_mix_hi.txt": {
+    "val_bpb": 0.6812598618548804,
+    "val_bpb_parts": [
+     0.0010208403189092335,
+     0.09164635845539126,
+     0.5235166387196549,
+     0.06507602552193609
+    ]
+   },
+   "val_mix_ja.txt": {
+    "val_bpb": 1.4113709041192732,
+    "val_bpb_parts": [
+     0.018433798543378847,
+     0.40630529229429085,
+     0.6579613931197389,
+     0.3286704268492742
+    ]
+   },
+   "val_mix_java.txt": {
+    "val_bpb": 0.7100799381409896,
+    "val_bpb_parts": [
+     0.020291306906258938,
+     0.17770740825248982,
+     0.39531973913647,
+     0.11676146237060014
+    ]
+   },
+   "val_mix_javascript.txt": {
+    "val_bpb": 0.9167855362307742,
+    "val_bpb_parts": [
+     0.015520777272394424,
+     0.2043349936450284,
+     0.5748989924908148,
+     0.12203076884190558
+    ]
+   },
+   "val_mix_python.txt": {
+    "val_bpb": 1.0660356649416394,
+    "val_bpb_parts": [
+     0.02454703207321842,
+     0.25591236550028085,
+     0.5841076290335437,
+     0.20146861226525292
+    ]
+   },
+   "val_mix_zh.txt": {
+    "val_bpb": 2.006593399170482,
+    "val_bpb_parts": [
+     0.014570073931992193,
+     0.5913181743435179,
+     0.9118986734567951,
+     0.4888064865833981
+    ]
+   }
+  },
+  "args": {
+   "tokenizers": [
+    "results/tokenizers/mix_131072_dict_search_hybrid_caff_d320.json"
+   ],
+   "train_text": "data/curated/mix_lm3x.txt",
+   "val_text": "data/curated/mix.test.txt",
+   "val_chars": 2000000,
+   "steps": 15000,
+   "allow_repeat": false,
+   "bs": 32,
+   "accum": 4,
+   "ctx": 512,
+   "d": 512,
+   "layers": 8,
+   "heads": 8,
+   "lr": 0.008,
+   "arch": "modern",
+   "opt": "muon",
+   "warmup": 200,
+   "eval_every": 1500,
+   "seed": 0,
+   "head": "chain",
+   "head_hidden": 1.0,
+   "order": "1,2,0,3",
+   "tag": "long_lr0.008",
+   "out": "results/lm_128k.json",
+   "extra_val": [
+    "val_mix_cpp.txt",
+    "val_mix_de.txt",
+    "val_mix_en.txt",
+    "val_mix_fr.txt",
+    "val_mix_go.txt",
+    "val_mix_hi.txt",
+    "val_mix_ja.txt",
+    "val_mix_java.txt",
+    "val_mix_javascript.txt",
+    "val_mix_python.txt",
+    "val_mix_zh.txt"
+   ]
+  }
+ }
+]

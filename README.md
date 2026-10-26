@@ -214,8 +214,19 @@ FineWeb-Edu, FineWeb-2, github-code-clean), on 4M held-out characters per source
 - The worst splits left are mostly real morphology (`year:s`, `उत्पाद:ों`), rare or bursty
   words, and a few single-token ties; `experiments/worst_cases.py` prints them per source.
 
-Not yet done: a language-model comparison with this tokenizer (the headline above uses the
-restricted 32k one).
+Language model (`experiments/run_128k.sh`, `results/lm_128k.json`): the modern recipe with
+128k-vocabulary models (BPE 92M parameters, ours 95M, mostly embeddings), both tokenizers
+trained on the same 320M characters per source, 15,000 steps at equal compute, the best learning
+rate of a two-point sweep (8e-3 for both, the higher one), one seed. Bits per byte, change vs
+standard BPE:
+
+| overall | English | German | French | Hindi | Japanese | Chinese | Python | JavaScript | Java | C++ | Go |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| +0.1% | −7.2% | −8.4% | −8.0% | −8.8% | +4.3% | +4.2% | +7.2% | +2.8% | +5.5% | +7.8% | +6.5% |
+
+Prose gains more than with the restricted 32k tokenizer, but code and Chinese / Japanese are
+worse, the reverse of the restricted tokenizer's result on code. Whether the longer code tokens
+and multi-word Chinese tokens become learnable with larger models is untested.
 
 Tried and not adopted (64k, 80M characters per source):
 - **Unigram-style code length** (`code_len`, `code_w_permille`; still in the code, off by default).
@@ -268,6 +279,7 @@ python experiments/lm.py results/tokenizers/mix_32768_bpe_gpt2.json --train_text
 python experiments/lm.py results/tokenizers/mix_32768_comb.json --head chain --order 1,2,0,3 [same args]
 python experiments/bench_compression.py && python experiments/bench_code.py   # compression benchmarks
 python experiments/bench_frontier.py                     # vs Kimi K3 / GPT-4o / GPT-4 tokenizers (see its docstring)
+bash experiments/run_128k.sh                             # 128k unrestricted vs BPE LM comparison (needs both tokenizers)
 python experiments/report.py && python scripts/make_figures.py                # report + figures
 ```
 
@@ -288,6 +300,8 @@ scripts/build_han_tables.py      OpenCC -> cbpe/data/han_st.json
 scripts/make_figures.py          figures/*.svg
 experiments/build_mix.py         mixed prose + code tokenizers and LM data
 experiments/lm.py                small-GPT bits-per-byte comparison (factored output heads)
+experiments/jax_lm.py            JAX port of lm.py for Cloud TPUs (sharding, checkpoints; see docs/tpu.md)
+experiments/lm_common.py         data caching, LR schedule and data order shared by both
 experiments/encode.py            streaming parallel tokenisation for lm.py
 experiments/bench_compression.py compression at equal budget, 10 corpora x 5 sizes, ablations
 experiments/bench_code.py        source-code compression (+ camelCase ablation, GPT-4 reference)
