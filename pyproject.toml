@@ -13,6 +13,7 @@ dependencies = ["regex"]
 
 [project.optional-dependencies]
 experiments = ["numpy", "matplotlib", "tokenizers", "huggingface_hub", "pyarrow", "opencc-python-reimplemented"]
+qwen3 = ["torch", "transformers>=4.51", "safetensors", "huggingface_hub", "numpy"]
 dev = ["pytest"]
 
 [tool.setuptools]
