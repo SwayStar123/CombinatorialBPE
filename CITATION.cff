@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use CombinatorialBPE or build on the technique, please cite this work."
+title: "CombinatorialBPE"
+type: software
+authors:
+  - family-names: "Bhanded"
+    given-names: "Swayam"
+repository-code: "https://github.com/SwayStar123/CombinatorialBPE"
+url: "https://github.com/SwayStar123/CombinatorialBPE"
+license: MIT

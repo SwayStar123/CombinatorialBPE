@@ -318,6 +318,19 @@ per text, within a few percent of the original's bits per byte on a mixed 10-sou
 weights on [Hugging Face](https://huggingface.co/SwayStar123/Qwen3-1.7B-CBPE), how to run it in
 [docs/qwen3.md](docs/qwen3.md).
 
+## Citation
+
+If you use CombinatorialBPE in your research, please cite:
+
+```bibtex
+@software{bhanded2026combinatorialbpe,
+  author = {Bhanded, Swayam},
+  title = {CombinatorialBPE},
+  year = {2026},
+  url = {https://github.com/SwayStar123/CombinatorialBPE}
+}
+```
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The Traditional/Simplified tables in `cbpe/data/han_st.json` are
